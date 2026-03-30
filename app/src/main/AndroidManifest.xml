@@ -116,7 +116,7 @@
         <!-- CHAVE API KEY -->
         <meta-data
             android:name="com.google.android.maps.v2.API_KEY"
-            android:value="AIzaSyD32K88SnMpmPlsQngbAaL566MOePzWWQY" />
+            android:value="AIzaSyBfQXz5ilMcVL-CwPRkNsbjqmNQjBHokB4" />
         <!-- com chave de debug -->
 
     </application>

@@ -48,6 +48,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+import teste.lucasvegi.pokemongooffline.Model.AoCarregarPokestopsListener;
 import teste.lucasvegi.pokemongooffline.Model.Aparecimento;
 import teste.lucasvegi.pokemongooffline.Model.ControladoraFachadaSingleton;
 import teste.lucasvegi.pokemongooffline.Model.InteracaoPokestop;
@@ -379,6 +380,9 @@ public class MapActivity extends FragmentActivity implements LocationListener, G
             Locpkstp.setLatitude(marker.getPosition().latitude);
             Locpkstp.setLongitude(marker.getPosition().longitude);
             double DistPkStop = getDistanciaPkStop(eu, Locpkstp);
+
+            Log.d("POKESTOP_DISTANCIA", "Distância até " + marker.getTitle() + ": " + DistPkStop + " metros");
+
             double distMin = distanciaMinimaParaBatalhar; //enquanto nao decidimos uma distancia apropriada deixar a mesma da batalha
             if (DistPkStop > distMin) {
                 DecimalFormat df = new DecimalFormat("0.##");
@@ -540,35 +544,32 @@ public class MapActivity extends FragmentActivity implements LocationListener, G
     }
 
     public void plotarPokestops() {
-        List<Pokestop> list = ControladoraFachadaSingleton.getInstance().getPokestops(eu.getPosition().latitude, eu.getPosition().longitude);
-        for (int i = 0; i < list.size(); i++) {
-            Pokestop p = list.get(i);
-            Location pkstp = new Location(provider);
-            pkstp.setLongitude(p.getlongi());
-            pkstp.setLatitude(p.getlat());
-            Marker pokestopMarker;
+        // Pegamos a posição atual do marcador do jogador
+        if (eu != null) {
+            LatLng posicaoUsuario = eu.getPosition();
 
-            double distancia = getDistanciaPkStop(eu, pkstp);
-            double distanciaMin = distanciaMinimaParaBatalhar;
+            ControladoraFachadaSingleton.getInstance().getPokestops(posicaoUsuario, new AoCarregarPokestopsListener() {
+                @Override
+                public void onPokestopsCarregados(List<Pokestop> lista) {
+                    for (Pokestop p : lista) {
+                        Location pkstpLoc = new Location("");
+                        pkstpLoc.setLatitude(p.getlat());
+                        pkstpLoc.setLongitude(p.getlongi());
 
-            if (p.getUltimoAcesso() != null) {
-                Date TempoAtual = Calendar.getInstance().getTime();
-                double diff = TempoAtual.getTime() - p.getUltimoAcesso().getTime();
-                double diffMinuto = diff / (1000);
-                if (diffMinuto > 300) {
-                    p.setDisponivel(true);
+                        double distancia = getDistanciaPkStop(eu, pkstpLoc);
+                        boolean noAlcance = distancia < distanciaMinimaParaBatalhar;
+
+                        Marker pokestopMarker = map.addMarker(p.getMarkerOptions(noAlcance));
+                        pokestopMarker.setTag("pokestop");
+                        pokestopMap.put(pokestopMarker, p);
+                    }
                 }
-            }
-            pokestopMarker = map.addMarker(p.getMarkerOptions(distancia < distanciaMin));
-            pokestopMarker.setTag("pokestop");
-            pokestopMap.put(pokestopMarker, p);
-
+            });
         }
-
     }
 
+
     public void plotarMarcadores() {
-        //Plota Marcadores
         try {
             Aparecimento [] apVet = ControladoraFachadaSingleton.getInstance().getAparecimentos();
 

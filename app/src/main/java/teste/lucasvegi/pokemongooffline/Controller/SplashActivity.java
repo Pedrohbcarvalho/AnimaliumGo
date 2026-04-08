@@ -1,5 +1,8 @@
 package teste.lucasvegi.pokemongooffline.Controller;
 
+import com.google.android.libraries.places.api.Places;
+import com.google.android.libraries.places.api.net.PlacesClient;
+
 import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
@@ -32,6 +35,10 @@ public class SplashActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_splash);
+
+        if (!Places.isInitialized()) {
+            Places.initialize(getApplicationContext(), "AIzaSyDATgN7KkYfXdALYKaxzvez087PHB6Xtm4");
+        }
 
         configuraViewInicio();
         if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED)

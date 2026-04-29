@@ -1,7 +1,6 @@
 package teste.lucasvegi.pokemongooffline.Controller;
 
 import android.annotation.SuppressLint;
-import android.content.ContentValues;
 import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
@@ -30,6 +29,7 @@ import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.BitmapDescriptor;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.LatLng;
@@ -41,8 +41,6 @@ import com.google.android.gms.maps.model.PolylineOptions;
 import java.io.ByteArrayOutputStream;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -51,10 +49,9 @@ import java.util.concurrent.TimeUnit;
 import teste.lucasvegi.pokemongooffline.Model.AoCarregarPokestopsListener;
 import teste.lucasvegi.pokemongooffline.Model.Aparecimento;
 import teste.lucasvegi.pokemongooffline.Model.ControladoraFachadaSingleton;
-import teste.lucasvegi.pokemongooffline.Model.InteracaoPokestop;
 import teste.lucasvegi.pokemongooffline.Model.Pokestop;
 import teste.lucasvegi.pokemongooffline.R;
-import teste.lucasvegi.pokemongooffline.Util.BancoDadosSingleton;
+import teste.lucasvegi.pokemongooffline.Util.BitmapUtil;
 import teste.lucasvegi.pokemongooffline.Util.directionshelpers.FetchURL;
 import teste.lucasvegi.pokemongooffline.Util.directionshelpers.TaskLoadedCallback;
 
@@ -100,6 +97,8 @@ public class MapActivity extends FragmentActivity implements LocationListener, G
     public Marker LongMax;
 
     public Location posicaoAtual, posicaoInit;
+    private BitmapDescriptor iconeMale, iconeFemale;
+    private BitmapDescriptor iconeUfvstopPerto, iconeUfvstopLonge, iconeUfvstopPertoUnable, iconeUfvstopLongeUnable;
 
     MediaPlayer mp; //música do mapa
 
@@ -139,10 +138,22 @@ public class MapActivity extends FragmentActivity implements LocationListener, G
         TextView txtNomeUser = (TextView) findViewById(R.id.txtNomeUser);
         txtNomeUser.setText(ControladoraFachadaSingleton.getInstance().getUsuario().getLogin());
         PackageManager packageManager = getPackageManager();
+
+        // Cria os ícones do usuário no onCreate para evitar criar um bitmap toda vez que um onLocationChanged acontecer
+        iconeMale = BitmapUtil.getBitmapDescriptor(getResources(), R.drawable.male_grande, 150, 220);
+        iconeFemale = BitmapUtil.getBitmapDescriptor(getResources(), R.drawable.female, 150, 220);
+
+        // Cria os ícones dos ufvstops
+        iconeUfvstopPerto = BitmapUtil.getBitmapDescriptor(getResources(), R.drawable.ufvstop_perto_grande, 140, 220);
+        iconeUfvstopLonge = BitmapUtil.getBitmapDescriptor(getResources(), R.drawable.ufvstop_longe_grande, 140, 220);
+        iconeUfvstopPertoUnable = BitmapUtil.getBitmapDescriptor(getResources(), R.drawable.ufvstop_perto_unable_grande, 140, 220);
+        iconeUfvstopLongeUnable = BitmapUtil.getBitmapDescriptor(getResources(), R.drawable.ufvstop_longe_unable_grande, 140, 220);
+
         boolean hasCam = packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA);
         if (hasCam)
             if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED)
                 ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, CAMERA_PERMISSION);
+
     }
 
     @Override
@@ -187,18 +198,15 @@ public class MapActivity extends FragmentActivity implements LocationListener, G
     protected void onResume() {
         super.onResume();
         try {
-            if (LastPkstopMarker!=null) {
-                Pokestop Pkstp = pokestopMap.get(LastPkstopMarker);
-
-                InteracaoPokestop interc = ControladoraFachadaSingleton.getInstance().getUltimaInteracao(Pkstp);
-
-                //atualizando ícone da pokestop que o usuário acabou de interagir
-                LastPkstopMarker.setIcon(Pkstp.getIcon(true));
-
+            if (LastPkstopMarker != null && posicaoAtual != null) {
+                Pokestop p = pokestopMap.get(LastPkstopMarker);
+                if (p != null) {
+                    // Atualiza o marcador com o estado atualizado do banco
+                    LastPkstopMarker.setIcon(getIconeParaUfvstop(p, posicaoAtual));
+                }
             }
-        }catch (Exception e){
-            Log.e("RESUME", "ERRO: " + e.getMessage());
-        }
+            if(mp != null && !mp.isPlaying()) mp.start();
+        } catch (Exception e) { Log.e("RESUME", e.getMessage()); }
     }
 
     @Override
@@ -241,10 +249,19 @@ public class MapActivity extends FragmentActivity implements LocationListener, G
         //Escolhe imagem do personagem de acordo com o sexo
         //mapa é carregado de forma assincrona
         if(map != null) {
-            if (ControladoraFachadaSingleton.getInstance().getUsuario().getSexo().equals("M") && map != null)
-                eu = map.addMarker(new MarkerOptions().position(personagem).icon(BitmapDescriptorFactory.fromResource(R.drawable.male)));
-            else
-                eu = map.addMarker(new MarkerOptions().position(personagem).icon(BitmapDescriptorFactory.fromResource(R.drawable.female)));
+            // Define qual ícone usar com base no sexo
+            BitmapDescriptor iconeUsuario;
+
+            if (ControladoraFachadaSingleton.getInstance().getUsuario().getSexo().equals("M")) {
+                iconeUsuario = iconeMale;
+            } else {
+                iconeUsuario = iconeFemale;
+            }
+
+            // Adiciona o marcador usando o ícone pré-carregado
+            eu = map.addMarker(new MarkerOptions()
+                    .position(personagem)
+                    .icon(iconeUsuario));
         }
         //centraliza a camera na primeira vez que obtiver a posição
         if(primeiraPosicao) {
@@ -476,41 +493,41 @@ public class MapActivity extends FragmentActivity implements LocationListener, G
 
     public void atualizaPokestops(){
         try {
+            if (posicaoAtual == null) return;
+
             for (Map.Entry<Marker, Pokestop> entry : pokestopMap.entrySet()) {
-                Log.d("AtualizarMarker", "PokeStop: " + entry.getKey().getTitle());
                 Marker marker = entry.getKey();
+                Pokestop p = entry.getValue();
 
-                if(marker != null){
-
-                    Pokestop p = entry.getValue();
-                    if(!p.getDisponivel()) {
-                        Date TempoAtual = Calendar.getInstance().getTime();
-                        InteracaoPokestop it = ControladoraFachadaSingleton.getInstance().getUltimaInteracao(p);
-                        double diff = TempoAtual.getTime() - it.getUltimoAcesso().getTime();
-                        int diffSec = (int) diff / (1000);
-                        if (diffSec > 300) {
-                            p.setDisponivel(true);
-                            ContentValues valores = new ContentValues();
-                            valores.put("disponivel", true);
-                            BancoDadosSingleton.getInstance().atualizar("Pokestop", valores, "idPokestop = '" + p.getID() + "'");
-                        } else
-                            p.setDisponivel(false);
-                    }
-                    Location pkstp = new Location(provider);
-                    pkstp.setLongitude(p.getlongi());
-                    pkstp.setLatitude(p.getlat());
-
-                    double distancia = getDistanciaPkStop(eu,pkstp);
-                    double distanciaMin = distanciaMinimaParaBatalhar;
-
-                    marker.setIcon(p.getIcon(distancia < distanciaMin));
+                if(marker != null && p != null){
+                    marker.setIcon(getIconeParaUfvstop(p, posicaoAtual));
                 }
             }
+
         } catch (Exception e) {
             Log.e("LimparMarker", "ERRO: " + e.getMessage());
         }
     }
 
+    private BitmapDescriptor getIconeParaUfvstop(Pokestop p, Location playerLoc) {
+        // Sincroniza com o banco de dados
+        ControladoraFachadaSingleton.getInstance().getUltimaInteracao(p);
+
+        // calcula distância
+        Location stopLoc = new Location("");
+        stopLoc.setLatitude(p.getlat());
+        stopLoc.setLongitude(p.getlongi());
+        double distancia = playerLoc.distanceTo(stopLoc);
+
+        boolean noAlcance = distancia < distanciaMinimaParaBatalhar;
+        boolean disponivel = p.getDisponivel();
+
+        // Retorna o ícone correto
+        if (noAlcance && disponivel) return iconeUfvstopPerto;
+        if (!noAlcance && disponivel) return iconeUfvstopLonge;
+        if (noAlcance && !disponivel) return iconeUfvstopPertoUnable;
+        return iconeUfvstopLongeUnable;
+    }
     private String getDirectionsUrl(LatLng origin, LatLng dest) {
         // Origem da rota
         String str_origin = "origin=" + origin.latitude + "," + origin.longitude;
@@ -552,14 +569,14 @@ public class MapActivity extends FragmentActivity implements LocationListener, G
                 @Override
                 public void onPokestopsCarregados(List<Pokestop> lista) {
                     for (Pokestop p : lista) {
-                        Location pkstpLoc = new Location("");
-                        pkstpLoc.setLatitude(p.getlat());
-                        pkstpLoc.setLongitude(p.getlongi());
+                        BitmapDescriptor iconeRef = getIconeParaUfvstop(p, posicaoAtual);
 
-                        double distancia = getDistanciaPkStop(eu, pkstpLoc);
-                        boolean noAlcance = distancia < distanciaMinimaParaBatalhar;
+                        Marker pokestopMarker = map.addMarker(new MarkerOptions()
+                                .position(new LatLng(p.getlat(), p.getlongi()))
+                                .title(p.getNome())
+                                .icon(iconeRef)
+                                .alpha(1));
 
-                        Marker pokestopMarker = map.addMarker(p.getMarkerOptions(noAlcance));
                         pokestopMarker.setTag("pokestop");
                         pokestopMap.put(pokestopMarker, p);
                     }

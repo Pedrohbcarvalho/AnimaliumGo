@@ -11,7 +11,7 @@
         android:scaleType="centerCrop"
         android:adjustViewBounds="true"
         android:id="@+id/imgFundoLogin"
-        android:src="@drawable/pallet2"
+        android:src="@drawable/splash_screen_family_animalium_go"
         android:alpha="0.9"/>
 
     <RelativeLayout

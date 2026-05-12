@@ -738,6 +738,41 @@ public final class BancoDadosSingleton {
                     e.printStackTrace();
                 }
             }
+
+            c = buscar("tipoovo", new String[]{"idTipoOvo", "foto", "fotoIncubadora"}, "", "");
+
+            while (c.moveToNext()) {
+                String idTipo = c.getString(c.getColumnIndex("idTipoOvo"));
+                int fotoBanco = c.getInt(c.getColumnIndex("foto"));
+                int incBanco = c.getInt(c.getColumnIndex("fotoIncubadora"));
+
+                try {
+                    String nomeFoto = "";
+                    String nomeInc = "";
+
+                    // Mapeia o ID do tipo para o nome do arquivo drawable
+                    switch (idTipo) {
+                        case "C": nomeFoto = "ovo_verde"; nomeInc = "incubadora_verde"; break;
+                        case "I": nomeFoto = "ovo_laranja"; nomeInc = "incubadora_laranja"; break;
+                        case "R": nomeFoto = "ovo_azul"; nomeInc = "incubadora_azul"; break;
+                        case "L": nomeFoto = "ovo_vermelho"; nomeInc = "incubadora_vermelha"; break;
+                    }
+
+                    Field fFoto = res.getDeclaredField(nomeFoto);
+                    Field fInc = res.getDeclaredField(nomeInc);
+
+                    // Se o ID no banco for diferente do ID atual do R.drawable, atualiza
+                    if (fFoto.getInt(null) != fotoBanco || fInc.getInt(null) != incBanco) {
+                        ContentValues ct = new ContentValues();
+                        ct.put("foto", fFoto.getInt(null));
+                        ct.put("fotoIncubadora", fInc.getInt(null));
+                        atualizar("tipoovo", ct, "idTipoOvo='" + idTipo + "'");
+                    }
+                } catch (Exception e) {
+                    Log.e("BANCO_DADOS", "Erro ao atualizar IDs de tipoovo: " + e.getMessage());
+                }
+            }
+            c.close(); // Fecha o cursor após o uso
         }
 
         c.close();

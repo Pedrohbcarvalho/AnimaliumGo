@@ -26,44 +26,6 @@
             android:alpha="1.0"
             android:clickable="false">
 
-            <ImageButton
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_alignParentTop="true"
-                android:layout_marginTop="5dp"
-                android:layout_marginBottom="0dp"
-                android:layout_marginLeft="10dp"
-                android:layout_marginRight="5dp"
-                android:layout_alignParentLeft="true"
-                android:id="@+id/botaoPerfil"
-                android:src="@drawable/male_profile"
-                android:background="@android:color/transparent"
-                android:scaleType="centerInside"
-                android:adjustViewBounds="true"
-                android:onClick="clickPerfil" />
-
-            <ImageButton
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginLeft="5dp"
-                android:layout_marginRight="10dp"
-                android:layout_alignParentRight="true"
-                android:layout_centerVertical="true"
-                android:background="@android:color/transparent"
-                android:scaleType="centerInside"
-                android:adjustViewBounds="true"
-                android:src="@drawable/pokedex"
-                android:onClick="clickPokedex" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textAppearance="?android:attr/textAppearanceSmall"
-                android:text="lucasvegi"
-                android:id="@+id/txtNomeUser"
-                android:layout_below="@+id/botaoPerfil"
-                android:layout_alignLeft="@+id/botaoPerfil" />
-
             <RelativeLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -72,32 +34,67 @@
                 android:background="@android:color/transparent"
                 android:alpha="1.0"
                 android:clickable="false">
-                <ImageButton
-                    android:id="@+id/botaoMapaGeral"
+
+                <LinearLayout
+                    android:id="@+id/linhaBotoes"
+                    android:layout_width="match_parent"
+                    android:layout_height="60dp"
+                    android:orientation="horizontal">
+
+                    <ImageButton
+                        android:id="@+id/botaoPerfil"
+                        android:layout_width="0dp"
+                        android:layout_height="61dp"
+                        android:layout_weight="1"
+                        android:layout_marginTop="2dp"
+                        android:background="@android:color/transparent"
+                        android:scaleType="fitCenter"
+                        android:src="@drawable/male_profile"
+                        android:onClick="clickPerfil" />
+
+                    <ImageButton
+                        android:id="@+id/botaoMapaGeral"
+                        android:layout_width="0dp"
+                        android:layout_height="58dp"
+                        android:layout_weight="1"
+                        android:layout_marginTop="2dp"
+                        android:background="@android:color/transparent"
+                        android:scaleType="fitCenter"
+                        android:src="@drawable/mapa_captura_grande"
+                        android:onClick="clickMapaCaptura" />
+
+                    <ImageButton
+                        android:id="@+id/botaoOvo"
+                        android:layout_width="0dp"
+                        android:layout_height="58dp"
+                        android:layout_weight="1"
+                        android:layout_marginTop="2dp"
+                        android:background="@android:color/transparent"
+                        android:scaleType="fitCenter"
+                        android:src="@drawable/ovo_verde"
+                        android:onClick="clickOvo" />
+
+                    <ImageButton
+                        android:id="@+id/botaoPokedex"
+                        android:layout_width="0dp"
+                        android:layout_height="58dp"
+                        android:layout_weight="1"
+                        android:layout_marginTop="2dp"
+                        android:background="@android:color/transparent"
+                        android:scaleType="fitCenter"
+                        android:src="@drawable/diario"
+                        android:onClick="clickPokedex" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/txtNomeUser"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_centerVertical="true"
-                    android:layout_marginLeft="30dp"
-                    android:layout_marginRight="30dp"
-                    android:adjustViewBounds="true"
-                    android:background="@android:color/transparent"
-                    android:onClick="clickMapaCaptura"
-                    android:scaleType="centerInside"
-                    android:src="@drawable/mapa_captura" />
-
-                <ImageButton
-                    android:id="@+id/botaoOvo"
-                    android:layout_width="46dp"
-                    android:layout_height="wrap_content"
-                    android:layout_centerVertical="true"
-                    android:layout_marginLeft="30dp"
-                    android:layout_marginRight="30dp"
-                    android:layout_toRightOf="@+id/botaoMapaGeral"
-                    android:adjustViewBounds="true"
-                    android:background="@android:color/transparent"
-                    android:onClick="clickOvo"
-                    android:scaleType="centerInside"
-                    android:src="@drawable/ovo_verde" />
+                    android:layout_below="@id/linhaBotoes"
+                    android:layout_marginLeft="10dp"
+                    android:text="lucasvegi"
+                    android:textAppearance="?android:attr/textAppearanceSmall"
+                    android:textColor="@android:color/black" />
             </RelativeLayout>
 
         </RelativeLayout>

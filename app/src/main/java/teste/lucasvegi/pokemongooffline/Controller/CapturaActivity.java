@@ -523,68 +523,125 @@ public class CapturaActivity extends Activity implements SensorEventListener {
         });
     }
 
-    public void configuraEfeitoCaptura(){
+//    public void configuraEfeitoCaptura(){
+//        mp = MediaPlayer.create(getBaseContext(), R.raw.quicando);
+//        mp.setOnCompletionListener(new MediaPlayer.OnCompletionListener(){
+//            int maxCount = 3;
+//            @Override
+//            public void onCompletion(MediaPlayer mediaPlayer) {
+//                if(countSound < maxCount) {
+//                    countSound++;
+//                    mediaPlayer.seekTo(0); //TODO: pesquisar o que faz metodo seekTo MediaPlayer
+//                    mediaPlayer.start();
+//
+//                    //anima a pokebola junto com o som de quique
+//                    if(countSound % 2 == 0) {
+//                        //pokebola.setRotation(0);
+//                        pokebola.animate().rotation(0).start();
+//
+//                    } else {
+//                        //pokebola.setRotation(-20);
+//                        pokebola.animate().rotation(-20).start();
+//                    }
+//
+//
+//                }else{
+//                    countSound = 0;
+//
+//                    MediaPlayer mp2 = MediaPlayer.create(getBaseContext(), R.raw.sucesso);
+//                    mp2.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
+//                        @Override
+//                        public void onCompletion(MediaPlayer mp) {
+//                            //TODO: enviar captura para o servidor antes de fechar tela. Talvez fazer isso diretamento no método capturar
+//                            ControladoraFachadaSingleton.getInstance().getUsuario().capturar(ap);
+//                            ControladoraFachadaSingleton.getInstance().aumentaXp("captura");   //atualiza XP do usuário após uma captura
+//                            finish(); //fecha o módulo de captura quando a música de sucesso acaba
+//                        }
+//                    });
+//
+//                    //pausa a musica da batalha e começa a do sucesso
+//                    mpBattle.pause();
+//                    mp2.start();
+//
+//                    Toast.makeText(getBaseContext(),pkmn.getNome() + " foi capturado! \\o/",Toast.LENGTH_LONG).show();
+//                }
+//            }});
+//        //diminui o volume do tema da batalha antes da pokebola quicar
+//        atribuirVolumeMediaPlayer(mpBattle, 85);
+//
+//        mp.start();
+//
+//        //substituiu imagem do pokemon por explosão
+//        img.setImageResource(R.drawable.explosion);
+//
+//        img.post(new Runnable() {
+//            @Override
+//            public void run() {
+//                try {
+//                    Thread.sleep(350);
+//                    img.setVisibility(View.INVISIBLE);
+//                } catch (Exception e) {
+//
+//                }
+//            }
+//        });
+//    }
+
+    public void configuraEfeitoCaptura() {
         mp = MediaPlayer.create(getBaseContext(), R.raw.quicando);
-        mp.setOnCompletionListener(new MediaPlayer.OnCompletionListener(){
+        mp.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
             int maxCount = 3;
+
             @Override
             public void onCompletion(MediaPlayer mediaPlayer) {
-                if(countSound < maxCount) {
+                if (countSound < maxCount) {
                     countSound++;
-                    mediaPlayer.seekTo(0); //TODO: pesquisar o que faz metodo seekTo MediaPlayer
+                    mediaPlayer.seekTo(0); // Reinicia o áudio do quique do início
                     mediaPlayer.start();
 
-                    //anima a pokebola junto com o som de quique
-                    if(countSound % 2 == 0) {
-                        //pokebola.setRotation(0);
+                    // Mantém a animação de rotação original
+                    if (countSound % 2 == 0) {
                         pokebola.animate().rotation(0).start();
-
                     } else {
-                        //pokebola.setRotation(-20);
                         pokebola.animate().rotation(-20).start();
                     }
-
-
-                }else{
+                } else {
                     countSound = 0;
 
-                    MediaPlayer mp2 = MediaPlayer.create(getBaseContext(), R.raw.sucesso);
-                    mp2.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
-                        @Override
-                        public void onCompletion(MediaPlayer mp) {
-                            //TODO: enviar captura para o servidor antes de fechar tela. Talvez fazer isso diretamento no método capturar
-                            ControladoraFachadaSingleton.getInstance().getUsuario().capturar(ap);
-                            ControladoraFachadaSingleton.getInstance().aumentaXp("captura");   //atualiza XP do usuário após uma captura
-                            finish(); //fecha o módulo de captura quando a música de sucesso acaba
-                        }
-                    });
+                    // Executa o salvamento IMEDIATAMENTE após os 3 quiques
+                    ControladoraFachadaSingleton.getInstance().getUsuario().capturar(ap);
+                    ControladoraFachadaSingleton.getInstance().aumentaXp("captura");
 
-                    //pausa a musica da batalha e começa a do sucesso
-                    mpBattle.pause();
+                    MediaPlayer mp2 = MediaPlayer.create(getBaseContext(), R.raw.sucesso);
+                    mpBattle.pause(); // Pausa a música de fundo
                     mp2.start();
 
-                    Toast.makeText(getBaseContext(),pkmn.getNome() + " foi capturado! \\o/",Toast.LENGTH_LONG).show();
-                }
-            }});
-        //diminui o volume do tema da batalha antes da pokebola quicar
-        atribuirVolumeMediaPlayer(mpBattle, 85);
+                    Toast.makeText(getBaseContext(), pkmn.getNome() + " foi capturado! \\o/", Toast.LENGTH_LONG).show();
 
-        mp.start();
-
-        //substituiu imagem do pokemon por explosão
-        img.setImageResource(R.drawable.explosion);
-
-        img.post(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    Thread.sleep(350);
-                    img.setVisibility(View.INVISIBLE);
-                } catch (Exception e) {
-
+                    // Handler garante que o finish() ocorra independente do sucesso do áudio
+                    new android.os.Handler().postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                            finish();
+                        }
+                    }, 4500); // Aguarda 2.5 segundos (tempo médio do som de sucesso)
                 }
             }
         });
+
+        atribuirVolumeMediaPlayer(mpBattle, 85);
+        mp.start();
+
+        // Troca para a imagem de explosão
+        img.setImageResource(R.drawable.explosion);
+
+        // Esconde a imagem após 350ms sem travar a UI Thread
+        img.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                img.setVisibility(View.INVISIBLE);
+            }
+        }, 350);
     }
 
     public void atribuirVolumeMediaPlayer(MediaPlayer mediaPlayer, int volume){

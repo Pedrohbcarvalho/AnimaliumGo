@@ -164,30 +164,28 @@ public class Usuario {
     }
 
     public void somarDoces(Pokemon p, int num){
-        //Obtendo a linha da tabela de Doces referentes ao pokemon p
-        Cursor cDoce = BancoDadosSingleton.getInstance().buscar("pokemon p, doce d",
-                new String[]{"d.idDoce idDoce","d.nome nome","d.quant quant"},
-                "p.idDoce = d.idDoce and d.idDoce = '" + p.getIdDoce() + "'",null);
-        cDoce.moveToNext(); //obs: fora do while pois deve haver apenas uma linha de resposta
+        // 1. Busca o doce filtrando pelo ID e pelo LOGIN do utilizador
+        Cursor cDoce = BancoDadosSingleton.getInstance().buscar("doce",
+                new String[]{"idDoce","nome","quant"},
+                "idDoce = '" + p.getIdDoce() + "' AND loginUsuario = '" + this.login + "'", null);
 
-        //TODO: seria bom usar um try-catch?
+        if (cDoce.moveToNext()) {
+            int idD = cDoce.getColumnIndex("idDoce");
+            int nome = cDoce.getColumnIndex("nome");
+            int quantDoces = cDoce.getColumnIndex("quant");
 
-        //Salvando os índices da tabela
-        int idDoce = cDoce.getColumnIndex("idDoce");
-        int nome = cDoce.getColumnIndex("nome");
-        int quantDoces = cDoce.getColumnIndex("quant");
+            ContentValues valoresDoce = new ContentValues();
+            valoresDoce.put("idDoce", cDoce.getInt(idD));
+            valoresDoce.put("nome", cDoce.getString(nome));
+            valoresDoce.put("quant", cDoce.getInt(quantDoces) + num);
 
-        //Prepara valores para serem persistidos no banco
-        ContentValues valoresDoce = new ContentValues();
-        valoresDoce.put("idDoce",cDoce.getInt(idDoce));
-        valoresDoce.put("nome",cDoce.getString(nome));
-        valoresDoce.put("quant",cDoce.getInt(quantDoces)+num); //soma 3 na qtd de doces
+            // 2. Atualiza apenas o registo deste utilizador específico
+            BancoDadosSingleton.getInstance().atualizar("doce", valoresDoce,
+                    "idDoce = '" + p.getIdDoce() + "' AND loginUsuario = '" + this.login + "'");
 
-        //Atualizando o banco
-        BancoDadosSingleton.getInstance().atualizar("doce",valoresDoce,"idDoce = " + "'" +p.getIdDoce() + "'");
-
-        Log.i("DOCES", "Quantidade de doces do " + cDoce.getString(nome)+ " = " + (int)(cDoce.getInt(quantDoces)+num) );
-
+            Log.i("DOCES", "Quantidade de doces do " + cDoce.getString(nome)+ " = " + (int)(cDoce.getInt(quantDoces)+num) );
+        }
+        cDoce.close();
     }
 
     public boolean capturar(Aparecimento aparecimento){

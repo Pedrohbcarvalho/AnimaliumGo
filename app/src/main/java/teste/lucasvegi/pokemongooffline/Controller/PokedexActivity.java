@@ -44,12 +44,36 @@ public class PokedexActivity extends Activity implements AdapterView.OnItemClick
             AdapterPokedex adapterPokedex = new AdapterPokedex(pokemons, this);
             listView.setAdapter(adapterPokedex);
             listView.setOnItemClickListener(this);
-            //Inicia a musica tema do menu
+
+            //Prepara a musica tema do menu
             mediaPlayer = MediaPlayer.create(getBaseContext(), R.raw.tema_menu);
             mediaPlayer.setLooping(true);
-            mediaPlayer.start();
 
         }catch (Exception e){
+            Log.e("POKEDEX", "ERRO: " + e.getMessage());
+        }
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        try {
+            if (mediaPlayer != null && !mediaPlayer.isPlaying()) {
+                mediaPlayer.start();
+            }
+        } catch (Exception e) {
+            Log.e("POKEDEX", "ERRO: " + e.getMessage());
+        }
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        try {
+            if (mediaPlayer != null && mediaPlayer.isPlaying()) {
+                mediaPlayer.pause();
+            }
+        } catch (Exception e) {
             Log.e("POKEDEX", "ERRO: " + e.getMessage());
         }
     }
@@ -59,9 +83,11 @@ public class PokedexActivity extends Activity implements AdapterView.OnItemClick
         super.onDestroy();
 
         try {
-            //para a música tema do menu e devolve o recurso para o sistema
-            mediaPlayer.pause();
-            mediaPlayer.release();
+            //devolve o recurso para o sistema
+            if (mediaPlayer != null) {
+                mediaPlayer.release();
+                mediaPlayer = null;
+            }
         }catch (Exception e){
             Log.e("POKEDEX", "ERRO: " + e.getMessage());
         }
@@ -101,17 +127,17 @@ public class PokedexActivity extends Activity implements AdapterView.OnItemClick
             return;
         }
         else if(requestCode == COD_REQUISICAO){
-                if(resultCode == ATUALIZAR_TELA){
-                    Log.i("ACTIVITY_RESULT", "Recebido código para atualizar a tela");
-                    //Inicia uma nova pokedex
-                    Intent itPokedex = new Intent(this, PokedexActivity.class);
-                    startActivity(itPokedex);
-                    //Termina a pokedex antiga
-                    finish();
-                }
-                else{
-                    Log.i("ACTIVITY_RESULT", "Código inválido");
-                }
+            if(resultCode == ATUALIZAR_TELA){
+                Log.i("ACTIVITY_RESULT", "Recebido código para atualizar a tela");
+                //Inicia uma nova pokedex
+                Intent itPokedex = new Intent(this, PokedexActivity.class);
+                startActivity(itPokedex);
+                //Termina a pokedex antiga
+                finish();
+            }
+            else{
+                Log.i("ACTIVITY_RESULT", "Código inválido");
+            }
         }
     }
 }

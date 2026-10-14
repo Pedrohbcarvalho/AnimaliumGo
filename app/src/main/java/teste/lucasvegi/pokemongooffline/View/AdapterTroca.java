@@ -7,9 +7,11 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
 import android.widget.TextView;
-
+import android.widget.ImageView;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import java.util.List;
-
+import teste.lucasvegi.pokemongooffline.Util.BitmapUtil;
 
 import teste.lucasvegi.pokemongooffline.R;
 
@@ -53,6 +55,20 @@ public class AdapterTroca extends BaseAdapter {
             TextView device_name = (TextView)
                     view.findViewById(R.id.troca_deviceName);
             device_name.setText(dev.getName());
+
+            ImageView fotoUsuario = (ImageView) view.findViewById(R.id.troca_userImg);
+
+            if(fotoUsuario != null) {
+                // ATENÇÃO 2: Troque 'sua_foto_gigante' pelo nome do arquivo drawable que você está exibindo (ex: R.drawable.male_profile)
+                Bitmap fotoOriginal = BitmapFactory.decodeResource(activity.getResources(), R.drawable.male_profile);
+
+                // Redimensiona a foto para 150x150 pixels mantendo a qualidade.
+                // Você pode alterar esses números (150) para deixar maior ou menor na lista.
+                Bitmap fotoRedimensionada = Bitmap.createScaledBitmap(fotoOriginal, 150, 150, true);
+
+                // Aplica a imagem redimensionada na tela
+                fotoUsuario.setImageBitmap(fotoRedimensionada);
+            }
 
             return view;
 

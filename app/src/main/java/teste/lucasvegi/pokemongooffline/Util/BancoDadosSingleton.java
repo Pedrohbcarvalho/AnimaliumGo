@@ -187,90 +187,93 @@ public final class BancoDadosSingleton {
                     "(151, 'Mew', 'L', "+ R.drawable.p151+", "+ R.drawable.i151+", 78, null);",
 
             "CREATE TABLE doce (" +
-                    "  idDoce INTEGER PRIMARY KEY," +
+                    "  idDoce INTEGER NOT NULL," +
+                    "  loginUsuario TEXT NOT NULL," +
                     "  nome TEXT NOT NULL," +
-                    "  quant INTEGER NOT NULL" +
+                    "  quant INTEGER NOT NULL," +
+                    "  PRIMARY KEY (idDoce, loginUsuario)," +
+                    "  CONSTRAINT fk_doce_usuario FOREIGN KEY (loginUsuario) REFERENCES usuario (login)" +
                     ");",
 
-            "INSERT INTO doce (idDoce, nome, quant) VALUES" +
-                    "(1, 'Bulbasaur', 0)," +
-                    "(2, 'Charmander', 0)," +
-                    "(3, 'Squirtle', 0)," +
-                    "(4, 'Caterpie', 0)," +
-                    "(5, 'Weedle', 0)," +
-                    "(6, 'Pidgey', 0)," +
-                    "(7, 'Rattata', 0)," +
-                    "(8, 'Spearow', 0)," +
-                    "(9, 'Ekans', 0)," +
-                    "(10, 'Pikachu', 0)," +
-                    "(11, 'Sandshrew', 0)," +
-                    "(12, 'Nidoran Femea', 0)," +
-                    "(13, 'Nidoran Macho', 0)," +
-                    "(14, 'Clefairy', 0)," +
-                    "(15, 'Vulpix', 0)," +
-                    "(16, 'Jigglypuff', 0)," +
-                    "(17, 'Zubat', 0)," +
-                    "(18, 'Oddish', 0)," +
-                    "(19, 'Paras', 0)," +
-                    "(20, 'Venonat', 0)," +
-                    "(21, 'Diglett', 0)," +
-                    "(22, 'Meowth', 0)," +
-                    "(23, 'Psyduck', 0)," +
-                    "(24, 'Mankey', 0)," +
-                    "(25, 'Growlithe', 0)," +
-                    "(26, 'Poliwag', 0)," +
-                    "(27, 'Abra', 0)," +
-                    "(28, 'Machop', 0)," +
-                    "(29, 'Bellsprout', 0)," +
-                    "(30, 'Tentacool', 0)," +
-                    "(31, 'Geodude', 0)," +
-                    "(32, 'Ponyta', 0)," +
-                    "(33, 'Slowpoke', 0)," +
-                    "(34, 'Magnemite', 0)," +
-                    "(35, 'Farfetch''d', 0)," +
-                    "(36, 'Doduo', 0)," +
-                    "(37, 'Seel', 0)," +
-                    "(38, 'Grimer', 0)," +
-                    "(39, 'Shellder', 0)," +
-                    "(40, 'Gastly', 0)," +
-                    "(41, 'Onix', 0)," +
-                    "(42, 'Drowzee', 0)," +
-                    "(43, 'Krabby', 0)," +
-                    "(44, 'Voltorb', 0)," +
-                    "(45, 'Exeggcute', 0)," +
-                    "(46, 'Cubone', 0)," +
-                    "(47, 'Tyrogue', 0)," +
-                    "(48, 'Lickitung', 0)," +
-                    "(49, 'Koffing', 0)," +
-                    "(50, 'Rhyhorn', 0)," +
-                    "(51, 'Chansey', 0)," +
-                    "(52, 'Tangela', 0)," +
-                    "(53, 'Kangaskhan', 0)," +
-                    "(54, 'Horsea', 0)," +
-                    "(55, 'Goldeen', 0)," +
-                    "(56, 'Staryu', 0)," +
-                    "(57, 'Mr. Mime', 0)," +
-                    "(58, 'Scyther', 0)," +
-                    "(59, 'Jynx', 0)," +
-                    "(60, 'Electabuzz', 0)," +
-                    "(61, 'Magmar', 0)," +
-                    "(62, 'Pinsir', 0)," +
-                    "(63, 'Tauros', 0)," +
-                    "(64, 'Magikarp', 0)," +
-                    "(65, 'Lapras', 0)," +
-                    "(66, 'Ditto', 0)," +
-                    "(67, 'Eevee', 0)," +
-                    "(68, 'Porygon', 0)," +
-                    "(69, 'Omanyte', 0)," +
-                    "(70, 'Kabuto', 0)," +
-                    "(71, 'Aerodactyl', 0)," +
-                    "(72, 'Snorlax', 0)," +
-                    "(73, 'Articuno', 0)," +
-                    "(74, 'Zapdos', 0)," +
-                    "(75, 'Moltres', 0)," +
-                    "(76, 'Dratini', 0)," +
-                    "(77, 'Mewtwo', 0)," +
-                    "(78, 'Mew', 0);",
+//            "INSERT INTO doce (idDoce, nome, quant) VALUES" +
+//                    "(1, 'Bulbasaur', 0)," +
+//                    "(2, 'Charmander', 0)," +
+//                    "(3, 'Squirtle', 0)," +
+//                    "(4, 'Caterpie', 0)," +
+//                    "(5, 'Weedle', 0)," +
+//                    "(6, 'Pidgey', 0)," +
+//                    "(7, 'Rattata', 0)," +
+//                    "(8, 'Spearow', 0)," +
+//                    "(9, 'Ekans', 0)," +
+//                    "(10, 'Pikachu', 0)," +
+//                    "(11, 'Sandshrew', 0)," +
+//                    "(12, 'Nidoran Femea', 0)," +
+//                    "(13, 'Nidoran Macho', 0)," +
+//                    "(14, 'Clefairy', 0)," +
+//                    "(15, 'Vulpix', 0)," +
+//                    "(16, 'Jigglypuff', 0)," +
+//                    "(17, 'Zubat', 0)," +
+//                    "(18, 'Oddish', 0)," +
+//                    "(19, 'Paras', 0)," +
+//                    "(20, 'Venonat', 0)," +
+//                    "(21, 'Diglett', 0)," +
+//                    "(22, 'Meowth', 0)," +
+//                    "(23, 'Psyduck', 0)," +
+//                    "(24, 'Mankey', 0)," +
+//                    "(25, 'Growlithe', 0)," +
+//                    "(26, 'Poliwag', 0)," +
+//                    "(27, 'Abra', 0)," +
+//                    "(28, 'Machop', 0)," +
+//                    "(29, 'Bellsprout', 0)," +
+//                    "(30, 'Tentacool', 0)," +
+//                    "(31, 'Geodude', 0)," +
+//                    "(32, 'Ponyta', 0)," +
+//                    "(33, 'Slowpoke', 0)," +
+//                    "(34, 'Magnemite', 0)," +
+//                    "(35, 'Farfetch''d', 0)," +
+//                    "(36, 'Doduo', 0)," +
+//                    "(37, 'Seel', 0)," +
+//                    "(38, 'Grimer', 0)," +
+//                    "(39, 'Shellder', 0)," +
+//                    "(40, 'Gastly', 0)," +
+//                    "(41, 'Onix', 0)," +
+//                    "(42, 'Drowzee', 0)," +
+//                    "(43, 'Krabby', 0)," +
+//                    "(44, 'Voltorb', 0)," +
+//                    "(45, 'Exeggcute', 0)," +
+//                    "(46, 'Cubone', 0)," +
+//                    "(47, 'Tyrogue', 0)," +
+//                    "(48, 'Lickitung', 0)," +
+//                    "(49, 'Koffing', 0)," +
+//                    "(50, 'Rhyhorn', 0)," +
+//                    "(51, 'Chansey', 0)," +
+//                    "(52, 'Tangela', 0)," +
+//                    "(53, 'Kangaskhan', 0)," +
+//                    "(54, 'Horsea', 0)," +
+//                    "(55, 'Goldeen', 0)," +
+//                    "(56, 'Staryu', 0)," +
+//                    "(57, 'Mr. Mime', 0)," +
+//                    "(58, 'Scyther', 0)," +
+//                    "(59, 'Jynx', 0)," +
+//                    "(60, 'Electabuzz', 0)," +
+//                    "(61, 'Magmar', 0)," +
+//                    "(62, 'Pinsir', 0)," +
+//                    "(63, 'Tauros', 0)," +
+//                    "(64, 'Magikarp', 0)," +
+//                    "(65, 'Lapras', 0)," +
+//                    "(66, 'Ditto', 0)," +
+//                    "(67, 'Eevee', 0)," +
+//                    "(68, 'Porygon', 0)," +
+//                    "(69, 'Omanyte', 0)," +
+//                    "(70, 'Kabuto', 0)," +
+//                    "(71, 'Aerodactyl', 0)," +
+//                    "(72, 'Snorlax', 0)," +
+//                    "(73, 'Articuno', 0)," +
+//                    "(74, 'Zapdos', 0)," +
+//                    "(75, 'Moltres', 0)," +
+//                    "(76, 'Dratini', 0)," +
+//                    "(77, 'Mewtwo', 0)," +
+//                    "(78, 'Mew', 0);",
 
             "CREATE TABLE tipo (" +
                     "  idTipo INTEGER PRIMARY KEY," +
@@ -556,15 +559,17 @@ public final class BancoDadosSingleton {
                     "('R', "+R.drawable.ovo_azul+", "+R.drawable.incubadora_azul+",7,'Azul')," +
                     "('L', "+R.drawable.ovo_vermelho+", "+R.drawable.incubadora_vermelha+",10,'Vermelho');",
             "CREATE TABLE ovo (" +
-                    "  idOvo INTEGER PRIMARY KEY AUTOINCREMENT ," +
+                    "  idOvo INTEGER PRIMARY KEY AUTOINCREMENT," +
                     "  idPokemon INTEGER NOT NULL," +
                     "  idTipoOvo TEXT NOT NULL," +
+                    "  loginUsuario TEXT NOT NULL," +
                     "  incubado INTEGER NOT NULL," +
                     "  chocado INTEGER NOT NULL," +
                     "  exibido INTEGER NOT NULL," +
                     "  KmAndado DOUBLE NOT NULL," +
-                    "  CONSTRAINT fk_usuariopokemon_pokemon FOREIGN KEY (idPokemon) REFERENCES pokemon (idPokemon)," +
-                    "  CONSTRAINT fk_tipoovo FOREIGN KEY (idTipoOvo) REFERENCES tipoovo (idTipoOvo)" +
+                    "  CONSTRAINT fk_ovo_pokemon FOREIGN KEY (idPokemon) REFERENCES pokemon (idPokemon)," +
+                    "  CONSTRAINT fk_ovo_tipoovo FOREIGN KEY (idTipoOvo) REFERENCES tipoovo (idTipoOvo)," +
+                    "  CONSTRAINT fk_ovo_usuario FOREIGN KEY (loginUsuario) REFERENCES usuario (login)" +
                     ");",
             "CREATE TABLE pokestop (" +
                     "  idPokestop TEXT NOT NULL," +
@@ -703,6 +708,7 @@ public final class BancoDadosSingleton {
         }
         else{
             //Banco já criado
+            c.close();
             //precisamos garantir que os hashes dos resources sejam os mesmos
 
             //primeiro buscamos no banco os dados dos pokemons
@@ -739,6 +745,7 @@ public final class BancoDadosSingleton {
                 }
             }
 
+            c.close();
             c = buscar("tipoovo", new String[]{"idTipoOvo", "foto", "fotoIncubadora"}, "", "");
 
             while (c.moveToNext()) {

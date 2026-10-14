@@ -141,7 +141,7 @@ public class MapActivity extends FragmentActivity implements LocationListener, G
 
         // Cria os ícones do usuário no onCreate para evitar criar um bitmap toda vez que um onLocationChanged acontecer
         iconeMale = BitmapUtil.getBitmapDescriptor(getResources(), R.drawable.male_grande, 150, 220);
-        iconeFemale = BitmapUtil.getBitmapDescriptor(getResources(), R.drawable.female, 150, 220);
+        iconeFemale = BitmapUtil.getBitmapDescriptor(getResources(), R.drawable.female_grande, 150, 220);
 
         // Cria os ícones dos ufvstops
         iconeUfvstopPerto = BitmapUtil.getBitmapDescriptor(getResources(), R.drawable.ufvstop_perto_grande, 140, 220);

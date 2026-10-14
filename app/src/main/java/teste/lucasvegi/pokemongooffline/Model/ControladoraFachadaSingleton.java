@@ -55,9 +55,12 @@ public final class ControladoraFachadaSingleton {
     private List<Doce> doces;
 
     private void daoDoce(){
+        if (user == null) return;
         this.doces = new ArrayList<Doce>();
 
-        Cursor c = BancoDadosSingleton.getInstance().buscar("doce",new String[]{"idDoce","nome","quant"},"","");
+        Cursor c = BancoDadosSingleton.getInstance().buscar("doce",
+                new String[]{"idDoce","nome","quant"},
+                "loginUsuario = '" + user.getLogin() + "'", "");
 
         while(c.moveToNext()){
             int idD = c.getColumnIndex("idDoce");
@@ -90,9 +93,13 @@ public final class ControladoraFachadaSingleton {
     }
 
     private void daoOvo(){
+        if (user == null) return;
         this.ovos.clear();
 
-        Cursor c = BancoDadosSingleton.getInstance().buscar("ovo",new String[]{"idOvo","idPokemon","idTipoOvo","incubado","chocado","exibido","KmAndado"},"exibido = 0","");
+        String filtro = "exibido = 0 AND loginUsuario = '" + user.getLogin() + "'";
+        Cursor c = BancoDadosSingleton.getInstance().buscar("ovo",
+                new String[]{"idOvo","idPokemon","idTipoOvo","incubado","chocado","exibido","KmAndado"},
+                filtro, "");
 
         while(c.moveToNext()){
             int idO = c.getColumnIndex("idOvo");
@@ -107,7 +114,6 @@ public final class ControladoraFachadaSingleton {
         }
 
         c.close();
-
     }
 
     private void daoTipo(){
@@ -232,6 +238,10 @@ public final class ControladoraFachadaSingleton {
 
         c.close();
 
+        if (user != null) {
+            daoOvo();
+            daoDoce();
+        }
     }
 
     public static ControladoraFachadaSingleton getInstance(){
@@ -265,6 +275,7 @@ public final class ControladoraFachadaSingleton {
             BancoDadosSingleton.getInstance().inserir("interacaopokestop",valores);
         }
 
+        cPokestop.close();
 
         InteracaoPokestop interacaoPokestop = new InteracaoPokestop(p, user, acesso);
         p.setDisponivel(false);
@@ -285,6 +296,8 @@ public final class ControladoraFachadaSingleton {
 
             access = new Date( cPokestop.getLong(cAcesso)) ;
         }
+
+        cPokestop.close();
 
         if(access == null)
             p.setDisponivel(true);
@@ -716,12 +729,34 @@ public final class ControladoraFachadaSingleton {
         BancoDadosSingleton.getInstance().deletar("pokemonusuario", "");
         BancoDadosSingleton.getInstance().deletar("usuario","");
 
-        BancoDadosSingleton.getInstance().inserir("usuario",valores);
         //TODO: enviar o cadastro para o servidor web também
 
-        //chama apenas após cadastrar usuário
-        daoUsuario();
-        return true;
+        long resultado = BancoDadosSingleton.getInstance().inserir("usuario", valores);
+
+        if (resultado != -1) {
+            // Inicializacao dos doces para um usuario
+            List<Pokemon> todosPkmn = getPokemons();
+            List<Integer> idsDocesProcessados = new ArrayList<>();
+
+            for (Pokemon p : todosPkmn) {
+                if (!idsDocesProcessados.contains(p.getIdDoce())) {
+                    ContentValues vDoce = new ContentValues();
+                    vDoce.put("idDoce", p.getIdDoce());
+                    vDoce.put("loginUsuario", login);
+                    vDoce.put("nome", p.getNome());
+                    vDoce.put("quant", 0);
+
+                    BancoDadosSingleton.getInstance().inserir("doce", vDoce);
+                    idsDocesProcessados.add(p.getIdDoce());
+                }
+            }
+
+            // 3. Atualiza a memória e finaliza
+            daoUsuario();
+            return true;
+        }
+
+        return false;
     }
 
     public void cadastraOvo(int idPokemon, String idTipoOvo, int incubado, int chocado, int exibido, int KmAndado){
@@ -730,6 +765,7 @@ public final class ControladoraFachadaSingleton {
             ContentValues valores = new ContentValues();
             valores.put("idPokemon", idPokemon);
             valores.put("idTipoOvo", idTipoOvo);
+            valores.put("loginUsuario", user.getLogin());
             valores.put("incubado", incubado);
             valores.put("chocado", chocado);
             valores.put("exibido", exibido);

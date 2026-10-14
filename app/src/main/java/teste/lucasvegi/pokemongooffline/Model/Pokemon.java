@@ -211,9 +211,23 @@ public class Pokemon implements Serializable{
         Cursor cDoce = BancoDadosSingleton.getInstance().buscar("pokemon p, doce d",
                 new String[]{"d.quant quant"},
                 "p.idDoce = d.idDoce and d.idDoce = '" + this.getIdDoce() + "'",null);
+
+        int quant = 0;
+        if (cDoce.moveToNext()) {
+            quant = cDoce.getInt(cDoce.getColumnIndex("quant"));
+        }
+
+        cDoce.close();
+
+        return quant;
+
+        /*
+        Cursor cDoce = BancoDadosSingleton.getInstance().buscar("pokemon p, doce d",
+                new String[]{"d.quant quant"},
+                "p.idDoce = d.idDoce and d.idDoce = '" + this.getIdDoce() + "'",null);
         cDoce.moveToNext(); //obs: fora do while pois deve haver apenas uma linha de resposta
 
-        return cDoce.getInt(cDoce.getColumnIndex("quant"));
+        return cDoce.getInt(cDoce.getColumnIndex("quant")); */
     }
 
     @Override

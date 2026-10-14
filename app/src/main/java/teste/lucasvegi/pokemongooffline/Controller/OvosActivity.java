@@ -83,20 +83,45 @@ public class OvosActivity extends Activity implements AdapterView.OnItemClickLis
             listView.setOnItemClickListener(this);
             mediaPlayer = MediaPlayer.create(getBaseContext(), R.raw.tema_menu);
             mediaPlayer.setLooping(true);
-            mediaPlayer.start();
             exibirChocados();
         }catch (Exception e){
             Log.e("OVOS", "ERRO: " + e.getMessage());
         }
     }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        try {
+            if (mediaPlayer != null && !mediaPlayer.isPlaying()) {
+                mediaPlayer.start();
+            }
+        } catch (Exception e) {
+            Log.e("OVOS", "ERRO: " + e.getMessage());
+        }
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        try {
+            if (mediaPlayer != null && mediaPlayer.isPlaying()) {
+                mediaPlayer.pause();
+            }
+        } catch (Exception e) {
+            Log.e("OVOS", "ERRO: " + e.getMessage());
+        }
+    }
+
     @Override
     protected void onDestroy() {
         super.onDestroy();
 
         try {
-            //para a música tema do menu e devolve o recurso para o sistema
-            mediaPlayer.pause();
-            mediaPlayer.release();
+            if (mediaPlayer != null) {
+                mediaPlayer.release();
+                mediaPlayer = null;
+            }
         }catch (Exception e){
             Log.e("OVOS", "ERRO: " + e.getMessage());
         }

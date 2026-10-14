@@ -98,6 +98,8 @@ public class PerfilActivity extends Activity {
             Log.d("usuario","Nivel banco: " + user.getInt(idnivel));
         }
 
+        user.close();
+
         // Obtem referências das views
         ImageView imageView = (ImageView) findViewById(R.id.imgTreinadorPerfil);
         TextView txtInicioAventura = (TextView) findViewById(R.id.txtInicioAventuraPerfil);

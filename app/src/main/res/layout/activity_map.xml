@@ -84,6 +84,17 @@
                         android:scaleType="fitCenter"
                         android:src="@drawable/diario"
                         android:onClick="clickPokedex" />
+
+                    <ImageButton
+                        android:id="@+id/botaoVgi"
+                        android:layout_width="0dp"
+                        android:layout_height="58dp"
+                        android:layout_weight="1"
+                        android:layout_marginTop="2dp"
+                        android:background="@android:color/transparent"
+                        android:scaleType="fitCenter"
+                        android:src="@android:drawable/ic_menu_camera"
+                        android:onClick="clickVgi" />
                 </LinearLayout>
 
                 <TextView

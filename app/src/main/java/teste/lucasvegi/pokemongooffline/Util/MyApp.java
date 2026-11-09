@@ -4,9 +4,12 @@ import android.app.Application;
 import android.bluetooth.BluetoothSocket;
 import android.content.Context;
 import android.util.Log;
+import com.google.android.libraries.places.api.Places;
 
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+
+import teste.lucasvegi.pokemongooffline.R;
 
 /**
  * Created by Lucas on 12/12/2016.
@@ -18,6 +21,11 @@ public class MyApp extends Application {
 
     public void onCreate() {
         super.onCreate();
+
+        if (!Places.isInitialized()) {
+            Places.initialize(getApplicationContext(), getString(R.string.directions_key));
+        }
+
         MyApp.context = getApplicationContext();
     }
 

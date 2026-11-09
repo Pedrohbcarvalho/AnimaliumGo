@@ -22,6 +22,14 @@ import androidx.core.app.ActivityCompat;
 import teste.lucasvegi.pokemongooffline.Model.ControladoraFachadaSingleton;
 import teste.lucasvegi.pokemongooffline.R;
 
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
+import java.util.List;
+import android.util.Log;
+import teste.lucasvegi.pokemongooffline.Model.RetrofitClient;
+import teste.lucasvegi.pokemongooffline.Model.Animal;
+
 public class SplashActivity extends Activity {
 
     private final int LOCATION_PERMISSION = 1;
@@ -39,6 +47,25 @@ public class SplashActivity extends Activity {
         if (!Places.isInitialized()) {
             Places.initialize(getApplicationContext(), "AIzaSyDATgN7KkYfXdALYKaxzvez087PHB6Xtm4");
         }
+
+        RetrofitClient.getApi().getAnimais().enqueue(new Callback<List<Animal>>() {
+            @Override
+            public void onResponse(Call<List<Animal>> call, Response<List<Animal>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    Log.d("TESTE_RETROFIT", "Sucesso! Animais recebidos: " + response.body().size());
+                    for (Animal a : response.body()) {
+                        Log.d("TESTE_RETROFIT", "Animal: " + a.getNomePopular());
+                    }
+                } else {
+                    Log.e("TESTE_RETROFIT", "Erro na resposta: " + response.code());
+                }
+            }
+
+            @Override
+            public void onFailure(Call<List<Animal>> call, Throwable t) {
+                Log.e("TESTE_RETROFIT", "Falha de conexão: " + t.getMessage());
+            }
+        });
 
         configuraViewInicio();
         if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED)

@@ -85,6 +85,7 @@ public class MapActivity extends FragmentActivity implements LocationListener, G
     public final static int MENU_MAPA = 2;
     public final static int MENU_POKEDEX = 3;
     public final static int MENU_OVOS = 4;
+    public final static int MENU_VGI_CAMERA = 5;
 
     public List<Aparecimento> aparecimentos;
     public Map<Marker,Aparecimento> aparecimentoMap; //dicionário para ajudar no momento de clicar em pontos
@@ -105,6 +106,18 @@ public class MapActivity extends FragmentActivity implements LocationListener, G
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        if (ControladoraFachadaSingleton.getInstance().getUsuario() == null) {
+            boolean restaurouSessao = ControladoraFachadaSingleton.getInstance().temSessao();
+
+            if (!restaurouSessao) {
+                Intent intent = new Intent(this, LoginActivity.class);
+                startActivity(intent);
+                finish();
+                return;
+            }
+        }
+
         setContentView(R.layout.activity_map);
 
         frag = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.mapa);
@@ -699,6 +712,18 @@ public class MapActivity extends FragmentActivity implements LocationListener, G
         startActivityForResult(it, MENU_OVOS);
     }
 
+    public void clickVgi(View v) {
+        if(mp != null && mp.isPlaying()) mp.pause();
+        Intent it = new Intent(this, VgiActivity.class);
+
+        if (posicaoAtual != null) {
+            it.putExtra("latitude", posicaoAtual.getLatitude());
+            it.putExtra("longitude", posicaoAtual.getLongitude());
+        }
+
+        startActivity(it);
+    }
+
     @Override
     public void run() {
         try {
@@ -745,6 +770,15 @@ public class MapActivity extends FragmentActivity implements LocationListener, G
             finish();
         }
 
+        if (requestCode == MENU_VGI_CAMERA && resultCode == RESULT_OK) {
+            // Como a câmera já salvou a foto gigante no arquivo para nós,
+            // só precisamos pegar o caminho do arquivo e abrir a próxima tela
+            java.io.File photoFile = new java.io.File(getCacheDir(), "foto_avistamento.jpg");
+
+            Intent it = new Intent(this, VgiActivity.class);
+            it.putExtra("caminho_foto", photoFile.getAbsolutePath());
+            startActivity(it);
+        }
     }
 
     @Override

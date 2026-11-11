@@ -63,6 +63,12 @@
                         android:scaleType="centerCrop"
                         android:background="#0F172A" />
 
+                    <!-- Preview da câmera dentro do app (a CameraPreview é adicionada aqui pelo código) -->
+                    <FrameLayout
+                        android:id="@+id/cameraPreviewVgi"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent" />
+
                     <TextView
                         android:id="@+id/txtCoordenadas"
                         android:layout_width="wrap_content"
@@ -76,6 +82,18 @@
                         android:textColor="#FFFFFF"
                         android:textSize="12sp"
                         android:text="Localização detectada..." />
+
+                    <Button
+                        android:id="@+id/btnTirarFoto"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_alignParentBottom="true"
+                        android:layout_alignParentEnd="true"
+                        android:layout_margin="12dp"
+                        android:text="CAPTURAR"
+                        android:textStyle="bold"
+                        android:textColor="#FFFFFF"
+                        android:backgroundTint="#16a34a" />
                 </RelativeLayout>
             </androidx.cardview.widget.CardView>
 

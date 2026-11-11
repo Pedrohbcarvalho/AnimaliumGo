@@ -5,8 +5,12 @@ import java.io.Serializable;
 
 public class Animal implements Serializable {
 
-    @SerializedName("id")
+    @SerializedName("idAnimal")
     private int id;
+
+    // Id do animal do qual este evolui (null se for forma base)
+    @SerializedName("idAnimalBase")
+    private Integer idAnimalBase;
 
     @SerializedName("nomePopular")
     private String nomePopular;
@@ -65,6 +69,7 @@ public class Animal implements Serializable {
     public String getStatusIUCN() { return statusIUCN; }
     public String getPericulosidade() { return periculosidade; }
     public String getFotoUrl() { return fotoUrl; }
+    public Integer getIdAnimalBase() { return idAnimalBase; }
 
 
     public void setId(int id) { this.id = id; }
@@ -81,4 +86,5 @@ public class Animal implements Serializable {
     public void setStatusIUCN(String statusIUCN) { this.statusIUCN = statusIUCN; }
     public void setPericulosidade(String periculosidade) { this.periculosidade = periculosidade; }
     public void setFotoUrl(String fotoUrl) { this.fotoUrl = fotoUrl; }
+    public void setIdAnimalBase(Integer idAnimalBase) { this.idAnimalBase = idAnimalBase; }
 }

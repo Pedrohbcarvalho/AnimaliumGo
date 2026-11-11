@@ -103,23 +103,56 @@ public class MapActivity extends FragmentActivity implements LocationListener, G
 
     MediaPlayer mp; //música do mapa
 
+    // Só fica true depois que a sessão foi restaurada e a tela montada.
+    // Até lá, onStart e onLocationChanged não podem usar o usuário nem o mapa.
+    private boolean telaInicializada = false;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        if (ControladoraFachadaSingleton.getInstance().getUsuario() == null) {
-            boolean restaurouSessao = ControladoraFachadaSingleton.getInstance().temSessao();
-
-            if (!restaurouSessao) {
-                Intent intent = new Intent(this, LoginActivity.class);
-                startActivity(intent);
-                finish();
-                return;
-            }
-        }
-
+        // Infla o layout logo de cara: o usuário vê a tela do mapa, não uma tela branca
         setContentView(R.layout.activity_map);
 
+        // Quando o Android mata o processo (ex.: câmera aberta pela VgiActivity), a controladora
+        // volta vazia. Criá-la (getInstance) e restaurar a sessão (temSessao) lê o banco inteiro,
+        // então isso é feito FORA da UI Thread.
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                boolean sessaoOk;
+                try {
+                    ControladoraFachadaSingleton controladora = ControladoraFachadaSingleton.getInstance();
+                    // Mesmo lock usado na VgiActivity: evita duas threads restaurando a sessão ao mesmo tempo
+                    synchronized (controladora) {
+                        sessaoOk = controladora.getUsuario() != null || controladora.temSessao();
+                    }
+                } catch (Exception e) {
+                    Log.e("MAPA", "Erro ao restaurar sessão", e);
+                    sessaoOk = false;
+                }
+
+                final boolean restaurou = sessaoOk;
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (isFinishing() || isDestroyed()) return;
+
+                        if (!restaurou) {
+                            startActivity(new Intent(MapActivity.this, LoginActivity.class));
+                            finish();
+                            return;
+                        }
+
+                        inicializarTela();
+                    }
+                });
+            }
+        }).start();
+    }
+
+    // Tudo o que antes vinha depois do setContentView no onCreate (roda na UI Thread)
+    private void inicializarTela() {
         frag = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.mapa);
         frag.getMapAsync(this);
         //criando MediaPlayer ao criar a activity para evitar null pointer exception
@@ -167,12 +200,23 @@ public class MapActivity extends FragmentActivity implements LocationListener, G
             if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED)
                 ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, CAMERA_PERMISSION);
 
+        telaInicializada = true;
+
+        // O onStart já passou enquanto a sessão era restaurada, então a localização começa aqui
+        iniciarLocalizacao();
     }
 
     @Override
     protected void onStart() {
         super.onStart();
 
+        // Na primeira abertura, quem chama é o inicializarTela(), quando a sessão estiver pronta
+        if (!telaInicializada) return;
+
+        iniciarLocalizacao();
+    }
+
+    private void iniciarLocalizacao() {
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             requestLocationPermission();
         } else {
@@ -224,7 +268,8 @@ public class MapActivity extends FragmentActivity implements LocationListener, G
 
     @Override
     protected void onDestroy() {
-        lm.removeUpdates(this);
+        // lm é null se a tela fechou antes de iniciar a localização (sessão expirada, sem permissão...)
+        if (lm != null) lm.removeUpdates(this);
         Log.d("PROVEDOR", "Provedor " + provider + " parado!");
 
         continuaSorteando = false; //para a thread de sorteio
@@ -242,6 +287,11 @@ public class MapActivity extends FragmentActivity implements LocationListener, G
     @Override
     public void onLocationChanged(Location location) {
         posicaoAtual = location;
+
+        // Após a recriação, o GPS já está "quente" e a localização pode chegar antes do onMapReady.
+        // Sem isso, map.animateCamera() abaixo dá NullPointerException.
+        // A posição fica guardada; a próxima atualização (5s) faz o resto com o mapa pronto.
+        if (!telaInicializada || map == null) return;
 
         LatLng personagem = new LatLng(location.getLatitude(),location.getLongitude());
 
@@ -581,6 +631,9 @@ public class MapActivity extends FragmentActivity implements LocationListener, G
             ControladoraFachadaSingleton.getInstance().getPokestops(posicaoUsuario, new AoCarregarPokestopsListener() {
                 @Override
                 public void onPokestopsCarregados(List<Pokestop> lista) {
+                    // A resposta da rede pode chegar depois que a tela já foi fechada
+                    if (isFinishing() || isDestroyed() || map == null) return;
+
                     for (Pokestop p : lista) {
                         BitmapDescriptor iconeRef = getIconeParaUfvstop(p, posicaoAtual);
 

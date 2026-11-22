@@ -4,10 +4,7 @@ import android.Manifest;
 import android.app.Activity;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.graphics.Matrix;
 import android.hardware.Camera;
-import android.media.ExifInterface;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
@@ -30,18 +27,12 @@ import java.util.Map;
 import teste.lucasvegi.pokemongooffline.Model.ControladoraFachadaSingleton;
 import teste.lucasvegi.pokemongooffline.Model.Pokemon;
 import teste.lucasvegi.pokemongooffline.Model.PokemonCapturado;
+import teste.lucasvegi.pokemongooffline.Model.SincronizadorVgi;
+import teste.lucasvegi.pokemongooffline.Util.BitmapUtil;
 import teste.lucasvegi.pokemongooffline.R;
 import teste.lucasvegi.pokemongooffline.View.CameraPreview;
 
-import okhttp3.MediaType;
-import okhttp3.MultipartBody;
-import okhttp3.RequestBody;
 
-import retrofit2.Call;
-import retrofit2.Callback;
-import retrofit2.Response;
-import com.google.gson.JsonObject;
-import teste.lucasvegi.pokemongooffline.Model.RetrofitClient;
 
 public class VgiActivity extends Activity {
 
@@ -244,6 +235,12 @@ public class VgiActivity extends Activity {
                     }
                 }
 
+                // Regrava já leve (~200KB): é este arquivo que vai para a fila e para o bucket.
+                // Se a compressão falhar, o JPEG original continua válido para envio.
+                if (salvou) {
+                    BitmapUtil.comprimirParaUpload(caminho);
+                }
+
                 final boolean ok = salvou;
                 runOnUiThread(new Runnable() {
                     @Override
@@ -292,7 +289,7 @@ public class VgiActivity extends Activity {
         new Thread(new Runnable() {
             @Override
             public void run() {
-                final Bitmap fotoCorrigida = carregarEProcessarFoto(caminho);
+                final Bitmap fotoCorrigida = BitmapUtil.decodificarComRotacao(caminho, 1024);
 
                 runOnUiThread(new Runnable() {
                     @Override
@@ -317,67 +314,6 @@ public class VgiActivity extends Activity {
                 });
             }
         }).start();
-    }
-
-    // Roda em background. Não toque em Views aqui dentro.
-    private Bitmap carregarEProcessarFoto(String caminho) {
-        try {
-            // 1) Lê só as dimensões, sem alocar memória para os pixels
-            BitmapFactory.Options options = new BitmapFactory.Options();
-            options.inJustDecodeBounds = true;
-            BitmapFactory.decodeFile(caminho, options);
-
-            if (options.outWidth <= 0 || options.outHeight <= 0) {
-                return null; // arquivo vazio/corrompido (ex.: câmera cancelada)
-            }
-
-            // 2) inSampleSize (potência de 2) para que o MAIOR lado fique <= 1024px
-            int maxSize = 1024;
-            int scale = 1;
-            while (options.outWidth / scale > maxSize || options.outHeight / scale > maxSize) {
-                scale *= 2;
-            }
-
-            // 3) Decodifica já reduzida
-            options.inJustDecodeBounds = false;
-            options.inSampleSize = scale;
-            Bitmap bitmapLeve = BitmapFactory.decodeFile(caminho, options);
-            if (bitmapLeve == null) return null;
-
-            // 4) Corrige a rotação pelo EXIF
-            ExifInterface exif = new ExifInterface(caminho);
-            int orientacao = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_UNDEFINED);
-
-            Matrix matrix = new Matrix();
-            switch (orientacao) {
-                case ExifInterface.ORIENTATION_ROTATE_90:
-                    matrix.postRotate(90);
-                    break;
-                case ExifInterface.ORIENTATION_ROTATE_180:
-                    matrix.postRotate(180);
-                    break;
-                case ExifInterface.ORIENTATION_ROTATE_270:
-                    matrix.postRotate(270);
-                    break;
-            }
-
-            // Sem rotação: devolve direto, sem criar uma segunda cópia na memória
-            if (matrix.isIdentity()) {
-                return bitmapLeve;
-            }
-
-            Bitmap rotacionado = Bitmap.createBitmap(bitmapLeve, 0, 0, bitmapLeve.getWidth(), bitmapLeve.getHeight(), matrix, true);
-            if (rotacionado != bitmapLeve) {
-                bitmapLeve.recycle(); // libera o intermediário imediatamente
-            }
-            return rotacionado;
-        } catch (OutOfMemoryError e) {
-            // Última linha de defesa: não derruba o app, apenas não exibe a prévia
-            Log.e("VGI", "Sem memória para decodificar a foto", e);
-        } catch (Exception e) {
-            Log.e("VGI", "Erro no processamento da foto", e);
-        }
-        return null;
     }
 
     private void carregarAnimaisNoAutoCompleteAssincrono() {
@@ -456,42 +392,50 @@ public class VgiActivity extends Activity {
             return;
         }
 
+        // A foto ainda está sendo gravada/comprimida em background
+        if (tirandoFoto || carregandoFoto) {
+            Toast.makeText(this, "Aguarde a foto ficar pronta.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
         File file = new File(caminhoFotoAtual);
         if (!file.exists()) {
             Toast.makeText(this, "Tire uma foto antes de enviar.", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        // Prepara a foto para upload
-        RequestBody requestFile = RequestBody.create(MediaType.parse("image/jpeg"), file);
-        // O parâmetro "file" deve bater com o nome do campo configurado no Multer
-        MultipartBody.Part bodyFoto = MultipartBody.Part.createFormData("foto", file.getName(), requestFile);
+        // TODO (pré-existente): enviar o id real -> animalEscolhido.getNumero()
+        int idAnimal = 2;
 
-        // Prepara os textos com as chaves exatas do backend
-        RequestBody reqIdAnimal = RequestBody.create(MediaType.parse("text/plain"), "2");
-        // RequestBody reqIdAnimal = RequestBody.create(MediaType.parse("text/plain"), String.valueOf(animalEscolhido.getNumero()));
-        RequestBody reqLat = RequestBody.create(MediaType.parse("text/plain"), String.valueOf(latitudeCaptura));
-        RequestBody reqLng = RequestBody.create(MediaType.parse("text/plain"), String.valueOf(longitudeCaptura));
+        // "Salva primeiro, envia depois": o relato vai para a fila local amarrado ao autor.
+        // Se não houver internet, ele é enviado na próxima vez que este usuário abrir o app.
+        String autor = ControladoraFachadaSingleton.getInstance().getUsuario().getLogin();
+        long idRelato = SincronizadorVgi.salvarNaFila(this, autor, idAnimal, latitudeCaptura, longitudeCaptura, file);
+        if (idRelato == -1) {
+            Toast.makeText(this, "Não foi possível salvar o relato. Tente de novo.", Toast.LENGTH_LONG).show();
+            return;
+        }
 
+        btnEnviarAvistamento.setEnabled(false); // evita envio duplicado
         Toast.makeText(this, "Enviando avistamento...", Toast.LENGTH_SHORT).show();
 
-        // Envia para a nuvem
-        RetrofitClient.getApi().enviarAvistamento(bodyFoto, reqIdAnimal, reqLat, reqLng).enqueue(new Callback<JsonObject>() {
+        SincronizadorVgi.enviar(idRelato, new SincronizadorVgi.AoTerminar() {
             @Override
-            public void onResponse(Call<JsonObject> call, Response<JsonObject> response) {
-                if (response.isSuccessful()) {
-                    Toast.makeText(VgiActivity.this, "Registro enviado com sucesso!", Toast.LENGTH_LONG).show();
-                    file.delete(); // Limpa a foto temporária
-                    finish();
-                } else {
-                    Toast.makeText(VgiActivity.this, "Erro no servidor: " + response.code(), Toast.LENGTH_LONG).show();
+            public void concluido(SincronizadorVgi.Resultado resultado) {
+                String msg;
+                switch (resultado) {
+                    case ENVIADO:
+                        msg = "Registro enviado com sucesso!";
+                        break;
+                    case SALVO_OFFLINE:
+                        msg = "Sem conexão. O relato foi salvo e será enviado automaticamente.";
+                        break;
+                    default:
+                        msg = "O servidor não aceitou agora. O relato foi salvo e será reenviado depois.";
+                        break;
                 }
-            }
-
-            @Override
-            public void onFailure(Call<JsonObject> call, Throwable t) {
-                // Futuramente, a fila Offline-First será implementada aqui
-                Toast.makeText(VgiActivity.this, "Falha de rede. O avistamento não foi enviado.", Toast.LENGTH_LONG).show();
+                Toast.makeText(VgiActivity.this, msg, Toast.LENGTH_LONG).show();
+                if (!isFinishing() && !isDestroyed()) finish();
             }
         });
     }

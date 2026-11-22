@@ -29,10 +29,11 @@ import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.HashMap;
 
+import teste.lucasvegi.pokemongooffline.Model.Animal;
 import teste.lucasvegi.pokemongooffline.Model.Aparecimento;
 import teste.lucasvegi.pokemongooffline.Model.ControladoraFachadaSingleton;
-import teste.lucasvegi.pokemongooffline.Model.Pokemon;
 import teste.lucasvegi.pokemongooffline.R;
+import teste.lucasvegi.pokemongooffline.Util.ImagemRemotaUtil;
 import teste.lucasvegi.pokemongooffline.Util.ViewUnitsUtil;
 import teste.lucasvegi.pokemongooffline.View.CameraPreview;
 
@@ -107,7 +108,7 @@ public class CapturaActivity extends Activity implements SensorEventListener {
 
     private TextView nomePkmnCaptura;
 
-    private Pokemon pkmn;
+    private Animal animal;
     private Aparecimento ap;
 
     private MediaPlayer mpBattle;
@@ -145,41 +146,43 @@ public class CapturaActivity extends Activity implements SensorEventListener {
     protected void onResume() {
         super.onResume();
 
-        //Recebe Intent com Aparecimento vindo do mapa
+        //Recebe Intent com o Aparecimento (animal real) vindo do mapa
         Intent it = getIntent();
-        ap = (Aparecimento) it.getSerializableExtra("pkmn");
-        pkmn = ap.getPokemon();
+        ap = (Aparecimento) it.getSerializableExtra("aparecimento");
+        animal = ap.getAnimal();
 
-        //TODO: RESOLVIDO - procura na lista de pokemons da controladora o pokemon recebido da tela anterior.
-        //pkmn = ControladoraFachadaSingleton.getInstance().convertPokemonSerializableToObject(pkmn);
-
-        //Define label avisando se pokemon é conhecido ou novo
+        //Define label avisando se o animal é conhecido ou novo. Se as capturas do jogador
+        //ainda não carregaram do servidor, esconde o rótulo em vez de arriscar um "novo" errado.
         TextView labelPkmnNovo = (TextView) findViewById(R.id.labelPkmnNovo);
-        if(ControladoraFachadaSingleton.getInstance().getUsuario().getQuantidadeCapturas(pkmn) > 0)
+        ControladoraFachadaSingleton controladora = ControladoraFachadaSingleton.getInstance();
+        if (!controladora.isCapturasCarregadas())
+            labelPkmnNovo.setVisibility(View.INVISIBLE);
+        else if (controladora.isAnimalCapturado(animal.getId()))
             labelPkmnNovo.setText("conhecido");
         else
             labelPkmnNovo.setText("novo");
 
-        //seta label com o nome do pokemon a ser capturado
+        //seta label com o nome do animal a ser capturado
         nomePkmnCaptura = (TextView) findViewById(R.id.txtNomePkmnCaptura);
         //garante só rodar após as views estarem na tela
         nomePkmnCaptura.post(new Runnable() {
             @Override
             public void run() {
-                nomePkmnCaptura.setText(pkmn.getNome());
+                nomePkmnCaptura.setText(animal.getNomePopular());
                 nomePkmnCaptura.measure(0,0);
-                //Posiciona o nome do pokemon na lateral superior direita com margem de 8dp à direita
+                //Posiciona o nome na lateral superior direita com margem de 8dp à direita
                 nomePkmnCaptura.setX(dimenX - nomePkmnCaptura.getMeasuredWidth() - ViewUnitsUtil.convertDpToPixel(8));
             }
         });
 
         img = (ImageView) findViewById(R.id.pokemon);
-        img.setImageResource(pkmn.getFoto());
-
         pokebola = (ImageView) findViewById(R.id.pokeball);
 
         configuraPokebola();
-        configuraPokemon();
+
+        //Ícone GRANDE: a mesma foto do pin do mapa, decodificada no tamanho da tela.
+        //configuraPokemon() mede a imagem real, então só roda depois que ela carregar.
+        ImagemRemotaUtil.carregarFotoGrande(img, animal.getFotoUrl(), this::configuraPokemon);
 
         if(sensor != null){
             //Começa a escutar os sensores utilizados
@@ -489,10 +492,14 @@ public class CapturaActivity extends Activity implements SensorEventListener {
             public void run() {
                 //define largura do pokemon em relação ao tamanho da tela
                 larguraImgPokemon = dimenX * percentImagePokemon;
+                //tamanho real da foto do animal (bitmap já carregado); não depende de o layout
+                //já ter medido a view depois do setImageBitmap
+                float larguraOriginal = img.getDrawable() != null ? img.getDrawable().getIntrinsicWidth() : img.getMeasuredWidth();
+                float alturaOriginal = img.getDrawable() != null ? img.getDrawable().getIntrinsicHeight() : img.getMeasuredHeight();
                 //obtem propoção da imagem redimensionada
-                float proporcaoPokemon = (larguraImgPokemon * 100) / img.getMeasuredWidth();
-                //define altura do pokemon de forma proporcional
-                alturaImgPokemon = img.getMeasuredHeight() * proporcaoPokemon / 100;
+                float proporcaoPokemon = (larguraImgPokemon * 100) / larguraOriginal;
+                //define altura do animal de forma proporcional
+                alturaImgPokemon = alturaOriginal * proporcaoPokemon / 100;
 
                 //obtem o centro da tela
                 //COLOCAR ELE RANDOMICO Mais pra frente
@@ -608,15 +615,16 @@ public class CapturaActivity extends Activity implements SensorEventListener {
                 } else {
                     countSound = 0;
 
-                    // Executa o salvamento IMEDIATAMENTE após os 3 quiques
-                    ControladoraFachadaSingleton.getInstance().getUsuario().capturar(ap);
+                    // Registra a captura no servidor IMEDIATAMENTE após os 3 quiques.
+                    // O XP local é só o feedback imediato: a resposta do POST traz o valor oficial.
+                    ControladoraFachadaSingleton.getInstance().registrarCapturaAnimal(ap);
                     ControladoraFachadaSingleton.getInstance().aumentaXp("captura");
 
                     MediaPlayer mp2 = MediaPlayer.create(getBaseContext(), R.raw.sucesso);
                     mpBattle.pause(); // Pausa a música de fundo
                     mp2.start();
 
-                    Toast.makeText(getBaseContext(), pkmn.getNome() + " foi capturado! \\o/", Toast.LENGTH_LONG).show();
+                    Toast.makeText(getBaseContext(), animal.getNomePopular() + " foi capturado! \\o/", Toast.LENGTH_LONG).show();
 
                     // Handler garante que o finish() ocorra independente do sucesso do áudio
                     new android.os.Handler().postDelayed(new Runnable() {

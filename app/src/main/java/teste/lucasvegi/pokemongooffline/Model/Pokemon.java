@@ -113,6 +113,7 @@ public class Pokemon implements Serializable{
 
     public int getIdPokemonBase(){return idPokemonBase;}
 
+    // DESACOPLADO (2026-11): doces/evolução não são mais usados; mantido só como referência.
     public Pokemon getEvolucao() {
         Cursor cPkmn = BancoDadosSingleton.getInstance().buscar("pokemon p, pokemon pe",
                 new String[]{"pe.idPokemon idPokemon", "pe.nome nome", "pe.categoria categoria", "pe.foto foto", "pe.icone icone",
@@ -153,6 +154,7 @@ public class Pokemon implements Serializable{
         return evolucao;
     }
 
+    // DESACOPLADO (2026-11): usado só pela evolução, que não é mais usada.
     public boolean estaDisponivel(boolean atualizarFlagBloqueado){
         // SELECT pu.login login, pu.idPokemon idPokemon, pu.latitude latitude,pu.longitude longitude,pu.dtCaptura dtCaptura
         // FROM pokemon p, pokemonusuario pu

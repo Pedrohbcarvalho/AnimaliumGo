@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/surface"
+    android:orientation="vertical">
+
+    <!-- Barra superior -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:background="@color/surface"
+        android:elevation="2dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="4dp"
+        android:paddingEnd="16dp">
+
+        <ImageButton
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Voltar"
+            android:onClick="clickVoltar"
+            android:src="@drawable/ic_arrow_back"
+            android:tint="@color/on_surface" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="4dp"
+            android:fontFamily="sans-serif"
+            android:text="Detalhes do Animal"
+            android:textColor="@color/on_surface"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+    <!-- Carregando -->
+    <ProgressBar
+        android:id="@+id/progressCarregando"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center" />
+
+    <!-- Conteúdo (aparece quando os dados chegam) -->
+    <ScrollView
+        android:id="@+id/scrollConteudo"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <!-- Foto herói -->
+            <ImageView
+                android:id="@+id/imgFotoAnimal"
+                android:layout_width="match_parent"
+                android:layout_height="260dp"
+                android:background="@drawable/fundo_foto_animal"
+                android:contentDescription="Foto do animal"
+                android:scaleType="centerCrop" />
+
+            <!-- Identificação -->
+            <TextView
+                android:id="@+id/txtNomePopular"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp"
+                android:fontFamily="sans-serif"
+                android:textColor="@color/on_surface"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/txtNomeCientifico"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp"
+                android:textColor="@color/on_surface_variant"
+                android:textSize="14sp"
+                android:textStyle="italic" />
+
+            <!-- Pílulas: Tamanho | Peso -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:orientation="horizontal">
+
+                <include
+                    android:id="@+id/pilulaTamanho"
+                    layout="@layout/item_pilula_animal" />
+
+                <Space
+                    android:layout_width="8dp"
+                    android:layout_height="0dp" />
+
+                <include
+                    android:id="@+id/pilulaPeso"
+                    layout="@layout/item_pilula_animal" />
+            </LinearLayout>
+
+            <!-- Ficha Biológica -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:layout_marginBottom="16dp"
+                android:background="@drawable/fundo_card_branco"
+                android:elevation="1dp"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="6dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:importantForAccessibility="no"
+                        android:src="@drawable/ic_menu_book" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:fontFamily="sans-serif"
+                        android:letterSpacing="0.08"
+                        android:text="Ficha Biológica"
+                        android:textAllCaps="true"
+                        android:textColor="@color/on_surface"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <include android:id="@+id/linhaClasse" layout="@layout/item_ficha_animal" />
+                <include android:id="@+id/linhaSubordem" layout="@layout/item_ficha_animal" />
+                <include android:id="@+id/linhaFamilia" layout="@layout/item_ficha_animal" />
+                <include android:id="@+id/linhaHabitat" layout="@layout/item_ficha_animal" />
+                <include android:id="@+id/linhaPericulosidade" layout="@layout/item_ficha_animal" />
+                <include android:id="@+id/linhaStatusIucn" layout="@layout/item_ficha_animal" />
+                <include android:id="@+id/linhaHabito" layout="@layout/item_ficha_animal" />
+                <include android:id="@+id/linhaDieta" layout="@layout/item_ficha_animal" />
+                <include android:id="@+id/linhaTamanho" layout="@layout/item_ficha_animal" />
+                <include android:id="@+id/linhaPeso" layout="@layout/item_ficha_animal" />
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+    </FrameLayout>
+</LinearLayout>

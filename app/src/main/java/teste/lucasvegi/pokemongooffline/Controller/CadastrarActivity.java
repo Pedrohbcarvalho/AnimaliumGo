@@ -13,7 +13,13 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 
-import teste.lucasvegi.pokemongooffline.Model.ControladoraFachadaSingleton;
+import com.google.gson.JsonObject;
+
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
+import teste.lucasvegi.pokemongooffline.Model.RetrofitClient;
+import teste.lucasvegi.pokemongooffline.Util.RedeUtil;
 import teste.lucasvegi.pokemongooffline.R;
 
 public class CadastrarActivity extends Activity {
@@ -38,7 +44,6 @@ public class CadastrarActivity extends Activity {
 
             EditText edtNome = (EditText) findViewById(R.id.edtNomeCadastro);
 
-            //TODO: verificar no servidor se usuário já existe.
             EditText edtUsuario = (EditText) findViewById(R.id.edtUsuarioCadastro);
 
             EditText edtSenha = (EditText) findViewById(R.id.edtSenhaCadastro);
@@ -47,7 +52,7 @@ public class CadastrarActivity extends Activity {
 
             //obtem dados informados pelo usuário
             String nome = edtNome.getText().toString();
-            String user = edtUsuario.getText().toString();
+            String user = edtUsuario.getText().toString().trim(); // e-mail
             String senha = edtSenha.getText().toString();
             String confSenha = edtConfirmaSenha.getText().toString();
             String nomeSexo = "";
@@ -62,11 +67,11 @@ public class CadastrarActivity extends Activity {
             if (nome.length() == 0 || nome.length() > 50) {
                 Toast.makeText(this, "Informe um nome com até 50 caracteres!", Toast.LENGTH_SHORT).show();
                 cadOk = false;
-            } else if (user.length() == 0 || user.length() > 45) {
-                Toast.makeText(this, "Informe um usuário com até 45 caracteres!", Toast.LENGTH_SHORT).show();
+            } else if (!android.util.Patterns.EMAIL_ADDRESS.matcher(user).matches()) {
+                Toast.makeText(this, "Informe um e-mail válido!", Toast.LENGTH_SHORT).show();
                 cadOk = false;
-            } else if (senha.length() == 0 || senha.length() > 45) {
-                Toast.makeText(this, "Informe uma senha com até 45 caracteres!", Toast.LENGTH_SHORT).show();
+            } else if (senha.length() < 6 || senha.length() > 45) {
+                Toast.makeText(this, "A senha deve ter entre 6 e 45 caracteres!", Toast.LENGTH_SHORT).show();
                 cadOk = false;
             } else if (confSenha.length() == 0) {
                 Toast.makeText(this, "Informe a confirmação da senha!", Toast.LENGTH_SHORT).show();
@@ -76,20 +81,53 @@ public class CadastrarActivity extends Activity {
                 cadOk = false;
             }
 
-            //Cadastra usuário se dados forem válidos
+            //Cadastra no servidor (a conta é criada no Supabase Auth) e depois entra pelo login normal
             if (cadOk) {
-                if (ControladoraFachadaSingleton.getInstance().cadastrarUser(user, senha, nome, nomeSexo, "")) {
-                    Toast.makeText(this, "Usuário cadastrado!", Toast.LENGTH_SHORT).show();
-                    Intent it = new Intent(this, MapActivity.class);
-                    startActivity(it);
-                    finish();
-                } else {
-                    Toast.makeText(this, "Problemas ao tentar cadastrar o Usuário.\nTente novamente!", Toast.LENGTH_SHORT).show();
-                }
+                cadastrarNoServidor(nome, user, senha, nomeSexo);
             }
 
         }catch (Exception e){
             Log.e("CADASTRO", "ERRO: " + e.getMessage());
         }
+    }
+
+    // A senha só trafega nesta requisição (e no login logo em seguida); nunca é salva no aparelho
+    private void cadastrarNoServidor(String nome, final String email, final String senha, String sexo) {
+        if (!RedeUtil.temInternet(this)) {
+            Toast.makeText(this, "Sem internet. Conecte-se para criar sua conta.", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        JsonObject dados = new JsonObject();
+        dados.addProperty("nome", nome);
+        dados.addProperty("email", email);
+        dados.addProperty("password", senha);
+        dados.addProperty("sexo", sexo);
+
+        Toast.makeText(this, "Criando conta...", Toast.LENGTH_SHORT).show();
+
+        RetrofitClient.getApi().registrar(dados).enqueue(new Callback<JsonObject>() {
+            @Override
+            public void onResponse(Call<JsonObject> call, Response<JsonObject> response) {
+                if (isFinishing() || isDestroyed()) return;
+
+                if (response.isSuccessful()) {
+                    Toast.makeText(CadastrarActivity.this, "Conta criada!", Toast.LENGTH_SHORT).show();
+                    LoginActivity.autenticarEEntrar(CadastrarActivity.this, email, senha);
+                } else if (response.code() == 409) {
+                    Toast.makeText(CadastrarActivity.this, "Este e-mail já está cadastrado.", Toast.LENGTH_LONG).show();
+                } else {
+                    Log.e("CADASTRO", "Erro no cadastro: " + response.code());
+                    Toast.makeText(CadastrarActivity.this, "Problemas ao cadastrar. Confira os dados e tente novamente.", Toast.LENGTH_LONG).show();
+                }
+            }
+
+            @Override
+            public void onFailure(Call<JsonObject> call, Throwable t) {
+                Log.e("CADASTRO", "Falha de conexão: " + t.getMessage());
+                if (isFinishing() || isDestroyed()) return;
+                Toast.makeText(CadastrarActivity.this, "Não foi possível falar com o servidor. Verifique sua internet.", Toast.LENGTH_LONG).show();
+            }
+        });
     }
 }

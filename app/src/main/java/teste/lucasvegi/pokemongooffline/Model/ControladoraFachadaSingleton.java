@@ -29,8 +29,10 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import teste.lucasvegi.pokemongooffline.Util.BancoDadosSingleton;
@@ -38,11 +40,15 @@ import teste.lucasvegi.pokemongooffline.Util.MyApp;
 import teste.lucasvegi.pokemongooffline.Util.NearbySearch;
 import teste.lucasvegi.pokemongooffline.Util.RandomUtil;
 import teste.lucasvegi.pokemongooffline.Util.TimeUtil;
+import teste.lucasvegi.pokemongooffline.Util.TokenManager;
 
 /**
  * Created by Lucas on 08/12/2016.
  */
 public final class ControladoraFachadaSingleton {
+    // Tempo de espera entre duas interações com o mesmo PokéStop (5 minutos)
+    public static final long COOLDOWN_POKESTOP_MS = 5 * 60 * 1000L;
+
     private Usuario user;
     private Map<String,List<Pokemon>> pokemons;
     private Aparecimento[] aparecimentos = new Aparecimento[10];
@@ -50,8 +56,18 @@ public final class ControladoraFachadaSingleton {
     private static ControladoraFachadaSingleton INSTANCE = new ControladoraFachadaSingleton();
     private boolean sorteouLendario = false;
     private List<Ovo> ovos = new ArrayList<>();
+    private PerfilUsuario perfilUsuario; // perfil vindo da nuvem (GET /api/usuarios/me)
+
+    // Todos os animais cadastrados (GET /api/animais, carregado na Splash). Usado pelo sorteio do ovo.
+    private volatile List<Animal> todosAnimais = new ArrayList<>();
+
+    // Espécies que o usuário já obteve (GET /api/capturas/me). Decide o rótulo "novo"/"conhecido"
+    // da captura. Carregado na thread de sorteio ANTES do 1º spawn (ver sorteiaAparecimentosAnimais).
+    private final Set<Integer> idsAnimaisCapturados = Collections.synchronizedSet(new HashSet<Integer>());
+    private volatile boolean capturasCarregadas = false;
 
 
+    // DESACOPLADO (2026-11): doces/evolução não são mais usados; mantido só como referência.
     private List<Doce> doces;
 
     private void daoDoce(){
@@ -60,7 +76,7 @@ public final class ControladoraFachadaSingleton {
 
         Cursor c = BancoDadosSingleton.getInstance().buscar("doce",
                 new String[]{"idDoce","nome","quant"},
-                "loginUsuario = '" + user.getLogin() + "'", "");
+                "loginUsuario = ?", new String[]{user.getLogin()}, "");
 
         while(c.moveToNext()){
             int idD = c.getColumnIndex("idDoce");
@@ -86,7 +102,6 @@ public final class ControladoraFachadaSingleton {
     }
 
     private ControladoraFachadaSingleton() {
-        daoDoce();
         daoTipo();
         daoPokemons(this);
         daoOvo();
@@ -96,10 +111,9 @@ public final class ControladoraFachadaSingleton {
         if (user == null) return;
         this.ovos.clear();
 
-        String filtro = "exibido = 0 AND loginUsuario = '" + user.getLogin() + "'";
         Cursor c = BancoDadosSingleton.getInstance().buscar("ovo",
                 new String[]{"idOvo","idPokemon","idTipoOvo","incubado","chocado","exibido","KmAndado"},
-                filtro, "");
+                "exibido = 0 AND loginUsuario = ?", new String[]{user.getLogin()}, "");
 
         while(c.moveToNext()){
             int idO = c.getColumnIndex("idOvo");
@@ -211,37 +225,32 @@ public final class ControladoraFachadaSingleton {
         }
     }
 
-    private void daoUsuario(){
+    // Carrega para a memória APENAS o usuário informado (antes lia a tabela inteira e
+    // o último registro "vencia", misturando usuários diferentes do mesmo aparelho).
+    private boolean daoUsuario(String login){
+        if (login == null) return false;
 
-        Cursor c = BancoDadosSingleton.getInstance().buscar("usuario",new String[]{"login","senha","nome","sexo","foto","dtCadastro","xp","nivel"},"","");
+        Cursor c = BancoDadosSingleton.getInstance().buscar("usuario",
+                new String[]{"login","nome","sexo","foto","dtCadastro","xp","nivel"},
+                "login = ?", new String[]{login}, "");
 
-        while(c.moveToNext()){
-            int login = c.getColumnIndex("login");
-            int pass = c.getColumnIndex("senha");
-            int name = c.getColumnIndex("nome");
-            int sexo = c.getColumnIndex("sexo");
-            int foto = c.getColumnIndex("foto");
-            int dtCad = c.getColumnIndex("dtCadastro");
-            int xp = c.getColumnIndex("xp");
-            int nivel = c.getColumnIndex("nivel");
-
-            user = new Usuario(c.getString(login));
-
-            user.setSenha(c.getString(pass));
-            user.setNome(c.getString(name));
-            user.setSexo(c.getString(sexo));
-            user.setFoto(c.getString(foto)); //IMPLEMENTAR RETIRAR FOTO DE USUÁRIO NO CADASTRO
-            user.setDtCadastro(c.getString(dtCad));
-            user.setXp(c.getInt(xp));
-            user.setNivel(c.getInt(nivel));
+        boolean achou = c.moveToFirst();
+        if (achou) {
+            Usuario u = new Usuario(c.getString(c.getColumnIndex("login")));
+            u.setNome(c.getString(c.getColumnIndex("nome")));
+            u.setSexo(c.getString(c.getColumnIndex("sexo")));
+            u.setFoto(c.getString(c.getColumnIndex("foto")));
+            u.setDtCadastro(c.getString(c.getColumnIndex("dtCadastro")));
+            u.setXp(c.getInt(c.getColumnIndex("xp")));
+            u.setNivel(c.getInt(c.getColumnIndex("nivel")));
+            user = u;
         }
-
         c.close();
 
-        if (user != null) {
+        if (achou) {
             daoOvo();
-            daoDoce();
         }
+        return achou;
     }
 
     public static ControladoraFachadaSingleton getInstance(){
@@ -252,6 +261,14 @@ public final class ControladoraFachadaSingleton {
         return this.user;
     }
 
+    public PerfilUsuario getPerfilUsuario() {
+        return perfilUsuario;
+    }
+
+    public void setPerfilUsuario(PerfilUsuario perfilUsuario) {
+        this.perfilUsuario = perfilUsuario;
+    }
+
     public InteracaoPokestop interagePokestop(Pokestop p, Date acesso){
         ContentValues valores = new ContentValues();
 
@@ -259,15 +276,14 @@ public final class ControladoraFachadaSingleton {
 
         Cursor cPokestop = BancoDadosSingleton.getInstance().buscar("interacaopokestop ip",
                 new String[]{"ip.idPokestop idPokestop"},
-                "ip.idPokestop = '" + p.getID() + "' and ip.loginUsuario = '"+user.getLogin()+"'",
-                "");
+                "ip.idPokestop = ? and ip.loginUsuario = ?",
+                new String[]{p.getID(), user.getLogin()}, "");
 
         if(cPokestop.getCount() > 0){
             BancoDadosSingleton.getInstance().atualizar("interacaopokestop",
                     valores,
-                    "idPokestop = '"+p.getID()+"' and "+
-                            "loginUsuario='"+user.getLogin()+"'"
-            );
+                    "idPokestop = ? and loginUsuario = ?",
+                    new String[]{p.getID(), user.getLogin()});
         }
         else{
             valores.put("idPokestop",p.getID());
@@ -287,8 +303,8 @@ public final class ControladoraFachadaSingleton {
     public InteracaoPokestop getUltimaInteracao(Pokestop p){
         Cursor cPokestop = BancoDadosSingleton.getInstance().buscar("interacaopokestop",
                 new String[]{"ultimoAcesso"},
-                "idPokestop = '" + p.getID() + "' and loginUsuario = '"+user.getLogin()+"'",
-                "");
+                "idPokestop = ? and loginUsuario = ?",
+                new String[]{p.getID(), user.getLogin()}, "");
 
         Date access = null;
         while(cPokestop.getCount() > 0 && cPokestop.moveToNext()){
@@ -303,12 +319,8 @@ public final class ControladoraFachadaSingleton {
             p.setDisponivel(true);
         else{
             Date TempoAtual = Calendar.getInstance().getTime();
-            double diff = TempoAtual.getTime() - access.getTime();
-            int diffSec = (int)diff/1000;
-            if(diffSec > 300)
-                p.setDisponivel(true);
-            else
-                p.setDisponivel(false);
+            long diffMs = TempoAtual.getTime() - access.getTime();
+            p.setDisponivel(diffMs >= COOLDOWN_POKESTOP_MS);
         }
 
         InteracaoPokestop interac = new InteracaoPokestop(p, user, access);
@@ -507,17 +519,11 @@ public final class ControladoraFachadaSingleton {
         return quantidadeOvosIncubado;
     }
 
+    // Sorteia só o TIPO do ovo (C/I/R/L = 2/5/7/10 km). O animal NÃO é escolhido aqui:
+    // ele é sorteado ao chocar (ver sortearAnimalDoOvo). A coluna ovo.idPokemon fica com 0
+    // (sem uso; o SQLite do app não liga PRAGMA foreign_keys, então a FK legada não é aplicada).
     public void sorteiaOvo(){
-
-        int tamComum = pokemons.get("C").size();
-        int tamIncomum = pokemons.get("I").size();
-        int tamRaro = pokemons.get("R").size();
-        int tamLendario = pokemons.get("L").size();
-
-        Log.d("SORTEIO_OVO","C: " + tamComum + " I: "+ tamIncomum + " R: "+ tamRaro + " L: " + tamLendario);
-
-        int min = 0;
-        int max;
+        final int SEM_ANIMAL = 0;
 
         //obtem hora atual
         Map<String,String> tempo = TimeUtil.getHoraMinutoSegundoDiaMesAno();
@@ -531,49 +537,83 @@ public final class ControladoraFachadaSingleton {
 
         Log.d("SORTEIO_OVO","NumInt: " + numIntSorteado + " NumInt2: " + numIntSorteado2 + " SomaMinSeg: " + somaMinSegAtual);
 
-        //sorteia OVO LENDÁRIO
+        //sorteia OVO LENDÁRIO (10 km)
         if(numIntSorteado % 2 == 0 && numIntSorteado2 % 2 == 0 && somaMinSegAtual % 2 != 0){
-            max = tamLendario;
-            int sorteio = RandomUtil.randomIntInRange(min,max);
-            int idP = pokemons.get("L").get(sorteio).getNumero();
+            cadastraOvo(SEM_ANIMAL, "L", 0, 0, 0, 0);
+            Log.d("SORTEIO_OVO","Ovo LENDÁRIO (10 km)");
 
-            cadastraOvo(idP, "L", 0, 0, 0, 0);
-
-            Log.d("SORTEIO_OVO","LENDÁRIO: " + pokemons.get("L").get(sorteio).getNome());
-
-            //sorteia OVO RARO
+            //sorteia OVO RARO (7 km)
         } else if(numIntSorteado % 2 != 0 && numIntSorteado2 % 2 != 0){
-            max = tamRaro;
-            int sorteio = RandomUtil.randomIntInRange(min,max);
-            int idP = pokemons.get("R").get(sorteio).getNumero();
+            cadastraOvo(SEM_ANIMAL, "R", 0, 0, 0, 0);
+            Log.d("SORTEIO_OVO","Ovo RARO (7 km)");
 
-            cadastraOvo(idP, "R", 0, 0, 0, 0);
-
-            Log.d("SORTEIO_OVO","RARO: " + pokemons.get("R").get(sorteio).getNome());
-
-            //sorteia OVO INCOMUM
+            //sorteia OVO INCOMUM (5 km)
         } else if(numIntSorteado <= 35){
-            max = tamIncomum;
-            int sorteio = RandomUtil.randomIntInRange(min,max);
-            int idP = pokemons.get("I").get(sorteio).getNumero();
+            cadastraOvo(SEM_ANIMAL, "I", 0, 0, 0, 0);
+            Log.d("SORTEIO_OVO","Ovo INCOMUM (5 km)");
 
-            cadastraOvo(idP, "I", 0, 0, 0, 0);
-
-            Log.d("SORTEIO_OVO","INCOMUM: " + pokemons.get("I").get(sorteio).getNome());
-
-            //Sorteia OVO COMUM
+            //Sorteia OVO COMUM (2 km)
         } else {
-            max = tamComum;
-            int sorteio = RandomUtil.randomIntInRange(min,max);
-            int idP = pokemons.get("C").get(sorteio).getNumero();
-
-            cadastraOvo(idP, "C", 0, 0, 0, 0);
-
-            Log.d("SORTEIO_OVO","COMUM: " + pokemons.get("C").get(sorteio).getNome());
+            cadastraOvo(SEM_ANIMAL, "C", 0, 0, 0, 0);
+            Log.d("SORTEIO_OVO","Ovo COMUM (2 km)");
         }
     }
 
+    public void setTodosAnimais(List<Animal> animais) {
+        this.todosAnimais = animais != null ? animais : new ArrayList<Animal>();
+        Log.d("SORTEIO_OVO", "Animais disponíveis para ovos: " + this.todosAnimais.size());
+    }
 
+    // REGRA TEMPORÁRIA (2026-11): qualquer animal cadastrado pode sair do ovo, em sorteio
+    // uniforme. Será substituída por uma regra própria (ex.: região do jogador/raridade).
+    // Retorna null se a lista de animais ainda não foi carregada (ex.: app aberto sem internet).
+    public Animal sortearAnimalDoOvo() {
+        List<Animal> animais = todosAnimais;
+        if (animais.isEmpty()) {
+            Log.w("SORTEIO_OVO", "Lista de animais vazia: o ovo espera para chocar");
+            return null;
+        }
+        Animal sorteado = animais.get(RandomUtil.randomIntInRange(0, animais.size()));
+        Log.d("SORTEIO_OVO", "Animal do ovo (regra temporária: qualquer animal): " + sorteado.getNomePopular());
+        return sorteado;
+    }
+
+    // Choca o ovo: sorteia o animal, registra no backend como captura de origem "ovo"
+    // (aparece no Diário) e dá o XP de chocar. Sem doces e sem tabela local de Pokémon.
+    // Retorna null quando ainda não há animal para sortear: o ovo continua esperando.
+    public Animal chocarOvo(int idOvo, android.location.Location local) {
+        final Animal animal = sortearAnimalDoOvo();
+        if (animal == null) return null;
+
+        com.google.gson.JsonObject body = new com.google.gson.JsonObject();
+        body.addProperty("idAnimal", animal.getId());
+        body.addProperty("latitude", local != null ? local.getLatitude() : 0);
+        body.addProperty("longitude", local != null ? local.getLongitude() : 0);
+        body.addProperty("origem", "ovo");
+
+        RetrofitClient.getApi().registrarCaptura(body).enqueue(new retrofit2.Callback<com.google.gson.JsonObject>() {
+            @Override
+            public void onResponse(retrofit2.Call<com.google.gson.JsonObject> call, retrofit2.Response<com.google.gson.JsonObject> response) {
+                if (response.isSuccessful()) {
+                    idsAnimaisCapturados.add(animal.getId());
+                    Log.d("OVO", "Ovo " + idOvo + " chocou " + animal.getNomePopular() + " (registrado no servidor)");
+                } else {
+                    Log.e("OVO", "Erro ao registrar " + animal.getNomePopular() + " chocado: " + response.code());
+                }
+            }
+
+            @Override
+            public void onFailure(retrofit2.Call<com.google.gson.JsonObject> call, Throwable t) {
+                Log.e("OVO", "Falha ao registrar " + animal.getNomePopular() + " chocado: " + t.getMessage());
+            }
+        });
+
+        aumentaXp("choca");
+        return animal;
+    }
+
+
+    // LEGADO (2026-11): sorteio local de Pokémon, desligado. O mapa usa sorteiaAparecimentosAnimais.
     public void sorteiaAparecimentos(double LatMin, double LatMax, double LongMin, double LongMax){
 
         int tamComum = pokemons.get("C").size();
@@ -675,88 +715,183 @@ public final class ControladoraFachadaSingleton {
         }
     }
 
-    public boolean loginUser(String login, String senha){
+    // Spawn de animais reais: o sorteio (habitat + VGI + hábito/horário) é feito no backend
+    // (logs "[SPAWN]" no servidor explicam quem foi puxado/rejeitado e por quê); aqui o app só
+    // espalha os animais recebidos dentro da caixa ao redor do jogador.
+    // SÍNCRONO: rode fora da UI thread (é chamado pela thread de sorteio do MapActivity).
+    public void sorteiaAparecimentosAnimais(double latitude, double longitude,
+                                           double latMin, double latMax, double lngMin, double lngMax) {
+        // Garante o rótulo "novo"/"conhecido" correto antes do 1º animal aparecer no mapa
+        carregarCapturasSeNecessario();
 
-        Cursor c = BancoDadosSingleton.getInstance().buscar("usuario",
-                new String[]{"login","senha","temSessao"},
-                "login = '"+login+"' AND senha = '"+senha+"'",
-                "");
+        Log.d("SPAWN_ANIMAIS", "Pedindo spawn em " + latitude + ", " + longitude
+                + " | caixa lat[" + latMin + ", " + latMax + "] lng[" + lngMin + ", " + lngMax + "]");
+        try {
+            retrofit2.Response<List<Animal>> response =
+                    RetrofitClient.getApi().getSpawnAnimais(latitude, longitude, 10).execute();
 
-        //significa que o usuário que está logando é o mesmo que fez login anteriormente
-        if(c.getCount() == 1){
-            //abri a sessão do usuário
-            ContentValues valores = new ContentValues();
-            valores.put("temSessao","SIM");
-            BancoDadosSingleton.getInstance().atualizar("usuario",valores,"login = '"+login+"'");
+            if (!response.isSuccessful() || response.body() == null) {
+                Log.e("SPAWN_ANIMAIS", "Erro na resposta: HTTP " + response.code() + " (mantidos os animais anteriores)");
+                return;
+            }
 
-            //chama apenas se existir o usuário
-            daoUsuario();
+            List<Animal> animais = response.body();
+            if (animais.isEmpty()) {
+                Log.w("SPAWN_ANIMAIS", "Lista vazia: nenhum animal para esta região/horário. "
+                        + "Veja os logs [SPAWN] do backend para o motivo de cada rejeição.");
+            }
 
-            c.close();
-            return true;
-        }else{
+            Aparecimento[] novos = new Aparecimento[animais.size()];
+            for (int i = 0; i < animais.size(); i++) {
+                Animal a = animais.get(i);
+                Aparecimento ap = new Aparecimento();
+                ap.setAnimal(a);
+                ap.setLatitude(RandomUtil.randomDoubleInRange(latMin, latMax));
+                ap.setLongitude(RandomUtil.randomDoubleInRange(lngMin, lngMax));
+                novos[i] = ap;
 
-            //TODO: implementar regras de negócio de sincronização com o servidor web
-            c.close();
-            return false;
+                boolean temFoto = a.getFotoUrl() != null && !a.getFotoUrl().isEmpty();
+                Log.d("SPAWN_ANIMAIS", "Puxado do backend: " + a.getNomePopular() + " (id " + a.getId()
+                        + ", hábito " + a.getHabito() + ") -> posição " + ap.getLatitude() + ", " + ap.getLongitude()
+                        + (temFoto ? "" : " | SEM FOTO: usará o marcador padrão"));
+            }
+            aparecimentos = novos;
+            Log.d("SPAWN_ANIMAIS", "Total no mapa: " + novos.length + " animal(is)");
+        } catch (java.io.IOException e) {
+            Log.e("SPAWN_ANIMAIS", "Falha de conexão: " + e.getMessage() + " (mantidos os animais anteriores)");
         }
     }
 
-    public boolean logoutUser(){
-
-        //fecha a sessão do usuário
-        ContentValues valores = new ContentValues();
-        valores.put("temSessao","NAO");
-
-        BancoDadosSingleton.getInstance().atualizar("usuario",valores,"login = '"+this.user.getLogin()+"'");
-        return true;
+    // GET /api/capturas/me síncrono, só enquanto ainda não carregou com sucesso
+    private void carregarCapturasSeNecessario() {
+        if (capturasCarregadas) return;
+        try {
+            retrofit2.Response<List<Animal>> response = RetrofitClient.getApi().getMinhasCapturas().execute();
+            if (response.isSuccessful() && response.body() != null) {
+                setIdsAnimaisCapturados(response.body());
+            } else {
+                Log.e("CAPTURAS", "Erro ao carregar capturas: HTTP " + response.code() + " (tenta de novo no próximo ciclo)");
+            }
+        } catch (java.io.IOException e) {
+            Log.e("CAPTURAS", "Falha ao carregar capturas: " + e.getMessage() + " (tenta de novo no próximo ciclo)");
+        }
     }
 
-    public boolean cadastrarUser(String login, String senha, String nome, String sexo, String foto){
+    // Substitui o conjunto pela lista completa vinda do servidor (Diário ou carga inicial)
+    public void setIdsAnimaisCapturados(List<Animal> capturados) {
+        synchronized (idsAnimaisCapturados) {
+            idsAnimaisCapturados.clear();
+            for (Animal a : capturados) idsAnimaisCapturados.add(a.getId());
+        }
+        capturasCarregadas = true;
+        Log.d("CAPTURAS", "Espécies já obtidas: " + capturados.size());
+    }
 
-        Map<String,String> timeStamp = TimeUtil.getHoraMinutoSegundoDiaMesAno();
+    public boolean isCapturasCarregadas() {
+        return capturasCarregadas;
+    }
 
-        ContentValues valores = new ContentValues();
-        valores.put("login",login);
-        valores.put("senha",senha);
-        valores.put("nome",nome);
-        valores.put("sexo",sexo);
-        valores.put("foto",foto);
-        valores.put("dtCadastro",timeStamp.get("dia")+"/"+timeStamp.get("mes")+"/"+timeStamp.get("ano")+" "+timeStamp.get("hora")+":"+timeStamp.get("minuto")+":"+timeStamp.get("segundo"));
-        valores.put("temSessao","SIM");
+    public boolean isAnimalCapturado(int idAnimal) {
+        return idsAnimaisCapturados.contains(idAnimal);
+    }
 
-        //limpa tabelas locais de pokemons capturados e de usuário
-        BancoDadosSingleton.getInstance().deletar("pokemonusuario", "");
-        BancoDadosSingleton.getInstance().deletar("usuario","");
+    // POST /api/capturas da captura feita no mapa. O servidor valida a área, grava e devolve o
+    // progresso (xp/nivel), que passa a ser o valor local.
+    public void registrarCapturaAnimal(Aparecimento ap) {
+        final Animal animal = ap.getAnimal();
+        com.google.gson.JsonObject body = new com.google.gson.JsonObject();
+        body.addProperty("idAnimal", animal.getId());
+        body.addProperty("latitude", ap.getLatitude());
+        body.addProperty("longitude", ap.getLongitude());
 
-        //TODO: enviar o cadastro para o servidor web também
-
-        long resultado = BancoDadosSingleton.getInstance().inserir("usuario", valores);
-
-        if (resultado != -1) {
-            // Inicializacao dos doces para um usuario
-            List<Pokemon> todosPkmn = getPokemons();
-            List<Integer> idsDocesProcessados = new ArrayList<>();
-
-            for (Pokemon p : todosPkmn) {
-                if (!idsDocesProcessados.contains(p.getIdDoce())) {
-                    ContentValues vDoce = new ContentValues();
-                    vDoce.put("idDoce", p.getIdDoce());
-                    vDoce.put("loginUsuario", login);
-                    vDoce.put("nome", p.getNome());
-                    vDoce.put("quant", 0);
-
-                    BancoDadosSingleton.getInstance().inserir("doce", vDoce);
-                    idsDocesProcessados.add(p.getIdDoce());
+        RetrofitClient.getApi().registrarCaptura(body).enqueue(new retrofit2.Callback<com.google.gson.JsonObject>() {
+            @Override
+            public void onResponse(retrofit2.Call<com.google.gson.JsonObject> call, retrofit2.Response<com.google.gson.JsonObject> response) {
+                com.google.gson.JsonObject resposta = response.body();
+                if (response.isSuccessful() && resposta != null) {
+                    idsAnimaisCapturados.add(animal.getId());
+                    if (resposta.has("progresso") && resposta.get("progresso").isJsonObject()) {
+                        com.google.gson.JsonObject p = resposta.getAsJsonObject("progresso");
+                        salvarProgressoLocal(p.get("xp").getAsInt(), p.get("nivel").getAsInt());
+                    }
+                    Log.d("CAPTURAS", animal.getNomePopular() + " registrado no servidor");
+                } else {
+                    Log.e("CAPTURAS", "Servidor recusou a captura de " + animal.getNomePopular() + ": HTTP " + response.code());
+                    Toast.makeText(MyApp.getAppContext(), "Não foi possível registrar a captura de "
+                            + animal.getNomePopular() + " no servidor.", Toast.LENGTH_LONG).show();
                 }
             }
 
-            // 3. Atualiza a memória e finaliza
-            daoUsuario();
-            return true;
+            @Override
+            public void onFailure(retrofit2.Call<com.google.gson.JsonObject> call, Throwable t) {
+                Log.e("CAPTURAS", "Falha ao registrar a captura de " + animal.getNomePopular() + ": " + t.getMessage());
+                Toast.makeText(MyApp.getAppContext(), "Sem conexão: a captura de "
+                        + animal.getNomePopular() + " não foi registrada.", Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
+    // Marca o usuário como o único com sessão aberta e o carrega na memória.
+    // A fonte da verdade da sessão é o TokenManager; a coluna temSessao é mantida coerente.
+    private void abrirSessao(String login){
+        ContentValues nao = new ContentValues();
+        nao.put("temSessao", "NAO");
+        BancoDadosSingleton.getInstance().atualizar("usuario", nao, "temSessao = ?", new String[]{"SIM"});
+
+        ContentValues sim = new ContentValues();
+        sim.put("temSessao", "SIM");
+        BancoDadosSingleton.getInstance().atualizar("usuario", sim, "login = ?", new String[]{login});
+
+        daoUsuario(login);
+    }
+
+    // Chamado após TODO login/cadastro online: espelha o perfil da nuvem no SQLite.
+    // Upsert: se o usuário já existe no aparelho, só atualiza (capturas, doces e ovos dele
+    // continuam lá); se não existe, cria. Nunca apaga dados de outros usuários.
+    public synchronized void salvarUsuarioDaNuvem(String login, PerfilUsuario perfil){
+        this.perfilUsuario = perfil;
+
+        ContentValues valores = new ContentValues();
+        valores.put("nome", perfil.getNome() != null ? perfil.getNome() : login);
+        valores.put("sexo", perfil.getSexo() != null ? perfil.getSexo() : "M");
+        valores.put("foto", perfil.getFoto() != null ? perfil.getFoto() : "");
+        valores.put("nivel", perfil.getNivel());
+        valores.put("xp", perfil.getXp());
+        if (perfil.getDtCadastro() != null) valores.put("dtCadastro", perfil.getDtCadastro());
+
+        int atualizados = BancoDadosSingleton.getInstance().atualizar("usuario", valores, "login = ?", new String[]{login});
+
+        if (atualizados == 0) {
+            if (perfil.getDtCadastro() == null) {
+                Map<String,String> ts = TimeUtil.getHoraMinutoSegundoDiaMesAno();
+                valores.put("dtCadastro", ts.get("dia")+"/"+ts.get("mes")+"/"+ts.get("ano")+" "+ts.get("hora")+":"+ts.get("minuto")+":"+ts.get("segundo"));
+            }
+            valores.put("login", login);
+            valores.put("temSessao", "NAO");
+            BancoDadosSingleton.getInstance().inserir("usuario", valores);
         }
 
-        return false;
+        abrirSessao(login);
+    }
+
+    // Encerra a sessão: limpa a memória e os tokens. Os dados locais do usuário (capturas,
+    // doces, ovos e relatos VGI pendentes) ficam guardados para o próximo login dele.
+    public synchronized boolean logoutUser(){
+        if (user != null) {
+            ContentValues valores = new ContentValues();
+            valores.put("temSessao", "NAO");
+            BancoDadosSingleton.getInstance().atualizar("usuario", valores, "login = ?", new String[]{user.getLogin()});
+        }
+
+        user = null;
+        perfilUsuario = null;
+        ovos.clear();
+        aparecimentos = new Aparecimento[0];
+        idsAnimaisCapturados.clear();
+        capturasCarregadas = false;
+
+        TokenManager.limpar(MyApp.getAppContext());
+        return true;
     }
 
     public void cadastraOvo(int idPokemon, String idTipoOvo, int incubado, int chocado, int exibido, int KmAndado){
@@ -778,20 +913,11 @@ public final class ControladoraFachadaSingleton {
         }
     }
 
+    // Há sessão quando existe refresh token salvo E o dono dele está no SQLite.
+    // Não depende de internet nem de senha: é isso que permite abrir o jogo offline.
     public boolean temSessao(){
-
-        Cursor sessao = BancoDadosSingleton.getInstance().buscar("usuario",new String[]{"login","temSessao"},"temSessao = 'SIM'","");
-
-        if(sessao.getCount() == 1){
-            //chama apenas se existir uma sessão de usuário
-            daoUsuario();
-
-            sessao.close();
-            return true;
-        }else{
-            sessao.close();
-            return false;
-        }
+        if (!TokenManager.temSessao(MyApp.getAppContext())) return false;
+        return daoUsuario(TokenManager.getLogin(MyApp.getAppContext()));
     }
 
     public Pokemon convertPokemonSerializableToObject(Pokemon pkmn) {
@@ -834,18 +960,10 @@ public final class ControladoraFachadaSingleton {
         getUsuario().setXp(xpFinal);
 
         ContentValues valores = new ContentValues();
-
-        valores.put("login", getUsuario().getLogin());
-        valores.put("senha", getUsuario().getSenha());
-        valores.put("nome", getUsuario().getNome());
-        valores.put("sexo", getUsuario().getSexo());
-        valores.put("foto", getUsuario().getFoto());
-        valores.put("dtCadastro", getUsuario().getDtCadastro());
-        valores.put("temSessao", "SIM");
         valores.put("nivel", nivelFinal);
         valores.put("xp", xpFinal);
 
-        int count = BancoDadosSingleton.getInstance().atualizar("usuario", valores, "login='"+getUsuario().getLogin()+"'");
+        int count = BancoDadosSingleton.getInstance().atualizar("usuario", valores, "login = ?", new String[]{getUsuario().getLogin()});
 
         if(count == 1) {
             Toast.makeText(MyApp.getAppContext(), "Você ganhou " + xpRecebido + " de XP", Toast.LENGTH_SHORT).show();
@@ -855,7 +973,48 @@ public final class ControladoraFachadaSingleton {
             }
         }
 
+        // Só informa a ação; o backend decide o XP. A captura é contabilizada pelo POST /api/capturas.
+        if (evento.equals("pokestop") || evento.equals("choca")) {
+            enviarAcaoXp(evento);
+        }
+
         return count == 1;
+    }
+
+    // PATCH /api/usuarios/me/progresso com {"acao": evento}; a resposta do servidor é a fonte da verdade
+    private void enviarAcaoXp(final String evento) {
+        com.google.gson.JsonObject body = new com.google.gson.JsonObject();
+        body.addProperty("acao", evento);
+
+        RetrofitClient.getApi().atualizarProgresso(body).enqueue(new retrofit2.Callback<com.google.gson.JsonObject>() {
+            @Override
+            public void onResponse(retrofit2.Call<com.google.gson.JsonObject> call, retrofit2.Response<com.google.gson.JsonObject> response) {
+                com.google.gson.JsonObject usuario = response.body();
+                if (response.isSuccessful() && usuario != null && usuario.has("xp") && usuario.has("nivel")) {
+                    salvarProgressoLocal(usuario.get("xp").getAsInt(), usuario.get("nivel").getAsInt());
+                } else {
+                    Log.e("XP", "Erro ao enviar ação '" + evento + "': " + response.code());
+                }
+            }
+
+            @Override
+            public void onFailure(retrofit2.Call<com.google.gson.JsonObject> call, Throwable t) {
+                Log.e("XP", "Falha ao enviar ação '" + evento + "': " + t.getMessage());
+            }
+        });
+    }
+
+    // Sobrescreve o progresso local (memória + SQLite) com os valores do servidor
+    private void salvarProgressoLocal(int xp, int nivel) {
+        if (getUsuario() == null) return;
+
+        getUsuario().setXp(xp);
+        getUsuario().setNivel(nivel);
+
+        ContentValues valores = new ContentValues();
+        valores.put("xp", xp);
+        valores.put("nivel", nivel);
+        BancoDadosSingleton.getInstance().atualizar("usuario", valores, "login = ?", new String[]{getUsuario().getLogin()});
     }
 
     public int xpMaximo(int nivelUsuario) {

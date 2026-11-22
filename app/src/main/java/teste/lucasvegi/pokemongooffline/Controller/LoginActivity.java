@@ -1,145 +1,110 @@
 package teste.lucasvegi.pokemongooffline.Controller;
 
+import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
+import teste.lucasvegi.pokemongooffline.Model.PerfilUsuario;
 import teste.lucasvegi.pokemongooffline.Model.RetrofitClient;
+import teste.lucasvegi.pokemongooffline.Util.RedeUtil;
 import teste.lucasvegi.pokemongooffline.Util.TokenManager;
 
 import android.app.Activity;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.Toast;
 
-import androidx.annotation.NonNull;
-import androidx.core.app.ActivityCompat;
-
 import teste.lucasvegi.pokemongooffline.Model.ControladoraFachadaSingleton;
 import teste.lucasvegi.pokemongooffline.R;
 
+// Login SEMPRE online: a senha só trafega nesta requisição e nunca é guardada no aparelho.
+// Depois do 1º login, o app abre direto no mapa (inclusive offline) enquanto houver
+// refresh token salvo; ver ControladoraFachadaSingleton.temSessao().
 public class LoginActivity extends Activity {
-
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
         setContentView(R.layout.activity_login);
-
     }
 
     public void clickLogin(View v){
-        try {
-            Log.i("LOGIN", "Autenticando a entrada no sistema...");
+        EditText edtUsuario = (EditText) findViewById(R.id.edtUsuarioLogin);
+        EditText edtSenha = (EditText) findViewById(R.id.edtSenhaLogin);
 
-            EditText edtUsuario = (EditText) findViewById(R.id.edtUsuarioLogin);
-            EditText edtSenha = (EditText) findViewById(R.id.edtSenhaLogin);
+        String email = edtUsuario.getText().toString().trim();
+        String senha = edtSenha.getText().toString();
 
-            final String usuario = edtUsuario.getText().toString();
-            final String senha = edtSenha.getText().toString();
-
-            // 1. Prepara o JSON para o Node.js (Ajuste a chave "email" se seu backend usar "username" ou "login")
-            JsonObject jsonLogin = new JsonObject();
-            jsonLogin.addProperty("email", usuario);
-            jsonLogin.addProperty("password", senha);
-
-            // 2. Tenta fazer login na nuvem
-            RetrofitClient.getApi().fazerLogin(jsonLogin).enqueue(new Callback<JsonObject>() {
-                @Override
-                public void onResponse(Call<JsonObject> call, Response<JsonObject> response) {
-                    if (response.isSuccessful() && response.body() != null) {
-                        // 1. Pega o token da resposta
-                        JsonObject body = response.body();
-                        String token = body.get("token").getAsString();
-                        TokenManager.salvarToken(LoginActivity.this, token);
-
-                        // 2. Extrai o perfil fiel da nuvem (Supabase)
-                        JsonObject user = body.getAsJsonObject("user");
-                        String nomeCloud = user.has("nome") && !user.get("nome").isJsonNull() ? user.get("nome").getAsString() : usuario;
-                        String sexoCloud = user.has("sexo") && !user.get("sexo").isJsonNull() ? user.get("sexo").getAsString() : "M";
-                        String fotoCloud = user.has("foto") && !user.get("foto").isJsonNull() ? user.get("foto").getAsString() : "";
-                        int nivelCloud = user.has("nivel") ? user.get("nivel").getAsInt() : 1;
-                        int xpCloud = user.has("xp") ? user.get("xp").getAsInt() : 0;
-                        String dtCadCloud = user.has("dtCadastro") && !user.get("dtCadastro").isJsonNull() ? user.get("dtCadastro").getAsString() : "";
-
-                        // 3. Tenta logar no cache local
-                        boolean logouLocal = ControladoraFachadaSingleton.getInstance().loginUser(usuario, senha);
-
-                        // 4. Se o usuário não existe no celular (primeiro login offline-first), fazemos o Sync
-                        if (!logouLocal) {
-                            // Usa o seu método padrão para preparar o terreno (limpar tabelas, criar doces, etc.)
-                            ControladoraFachadaSingleton.getInstance().cadastrarUser(usuario, senha, nomeCloud, sexoCloud, fotoCloud);
-
-                            // Sobrescreve os dados padrão do SQLite com o progresso real da nuvem
-                            android.content.ContentValues valores = new android.content.ContentValues();
-                            valores.put("nivel", nivelCloud);
-                            valores.put("xp", xpCloud);
-                            if (!dtCadCloud.isEmpty()) valores.put("dtCadastro", dtCadCloud);
-
-                            teste.lucasvegi.pokemongooffline.Util.BancoDadosSingleton.getInstance().atualizar("usuario", valores, "login='" + usuario + "'");
-
-                            // Recarrega o usuário na memória do singleton com os dados espelhados
-                            ControladoraFachadaSingleton.getInstance().loginUser(usuario, senha);
-                        }
-
-                        // 5. Entra no jogo com o banco local 100% igual à nuvem
-                        Intent it = new Intent(LoginActivity.this, MapActivity.class);
-                        startActivity(it);
-                        finish();
-                    } else {
-                        Toast.makeText(LoginActivity.this, "Credenciais inválidas no servidor!", Toast.LENGTH_SHORT).show();
-                    }
-                }
-
-                @Override
-                public void onFailure(Call<JsonObject> call, Throwable t) {
-                    // 5. Fallback Offline: Se não tem internet, tenta validar apenas pelo banco local
-                    Log.e("LOGIN", "Servidor inacessível, tentando login offline. Erro: " + t.getMessage());
-
-                    if (ControladoraFachadaSingleton.getInstance().loginUser(usuario, senha)) {
-                        Toast.makeText(LoginActivity.this, "Modo Offline Ativado", Toast.LENGTH_SHORT).show();
-                        Intent it = new Intent(LoginActivity.this, MapActivity.class);
-                        startActivity(it);
-                        finish();
-                    } else {
-                        Toast.makeText(LoginActivity.this, "Falha de rede e usuário não salvo localmente.", Toast.LENGTH_LONG).show();
-                    }
-                }
-            });
-        } catch (Exception e){
-            Log.e("LOGIN", "ERRO: " + e.getMessage());
+        if (email.isEmpty() || senha.isEmpty()) {
+            Toast.makeText(this, "Informe e-mail e senha.", Toast.LENGTH_SHORT).show();
+            return;
         }
+
+        autenticarEEntrar(this, email, senha);
     }
 
-    /*
-    public void clickLogin(View v){
-        try {
-            Log.i("LOGIN", "Autenticando a entrada no sistema...");
+    // Usado também pela CadastrarActivity logo após criar a conta.
+    // POST /api/auth/login -> salva tokens -> espelha o perfil no SQLite -> abre o mapa.
+    public static void autenticarEEntrar(final Activity tela, final String email, final String senha) {
+        if (!RedeUtil.temInternet(tela)) {
+            Toast.makeText(tela, "Sem internet. Conecte-se para entrar.", Toast.LENGTH_LONG).show();
+            return;
+        }
 
-            EditText edtUsuario = (EditText) findViewById(R.id.edtUsuarioLogin);
-            EditText edtSenha = (EditText) findViewById(R.id.edtSenhaLogin);
+        Log.i("LOGIN", "Autenticando a entrada no sistema...");
+        Toast.makeText(tela, "Entrando...", Toast.LENGTH_SHORT).show();
 
-            //Obtem dados do usuário
-            String usuario = edtUsuario.getText().toString();
-            String senha = edtSenha.getText().toString();
+        JsonObject jsonLogin = new JsonObject();
+        jsonLogin.addProperty("email", email);
+        jsonLogin.addProperty("password", senha);
 
-            if (ControladoraFachadaSingleton.getInstance().loginUser(usuario, senha)) {
-                Intent it = new Intent(this, MapActivity.class);
-                startActivity(it);
-                finish();
-            } else {
-                Toast.makeText(this, "Usuário e/ou senha inválido(s)!", Toast.LENGTH_SHORT).show();
+        RetrofitClient.getApi().fazerLogin(jsonLogin).enqueue(new Callback<JsonObject>() {
+            @Override
+            public void onResponse(Call<JsonObject> call, Response<JsonObject> response) {
+                if (tela.isFinishing() || tela.isDestroyed()) return;
+
+                JsonObject corpo = response.body();
+                if (!response.isSuccessful() || corpo == null) {
+                    Toast.makeText(tela, "E-mail ou senha inválidos.", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+
+                if (!corpo.has("token") || !corpo.has("refreshToken")
+                        || !corpo.has("user") || !corpo.get("user").isJsonObject()) {
+                    Log.e("LOGIN", "Resposta de login incompleta: " + corpo);
+                    Toast.makeText(tela, "Erro ao carregar o perfil do servidor.", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+
+                // O objeto "user" do login tem o mesmo formato de GET /api/usuarios/me
+                PerfilUsuario perfil = new Gson().fromJson(corpo.get("user"), PerfilUsuario.class);
+
+                // O e-mail canônico do servidor identifica o usuário no SQLite e é o dono dos tokens
+                String login = perfil.getEmail() != null ? perfil.getEmail() : email;
+
+                TokenManager.salvarSessao(tela,
+                        corpo.get("token").getAsString(),
+                        corpo.get("refreshToken").getAsString(),
+                        login);
+                ControladoraFachadaSingleton.getInstance().salvarUsuarioDaNuvem(login, perfil);
+                Log.d("LOGIN", "Perfil carregado: " + perfil.getNome() + " (nível " + perfil.getNivel() + ")");
+
+                tela.startActivity(new Intent(tela, MapActivity.class));
+                tela.finish();
             }
-        }catch (Exception e){
-            Log.e("LOGIN", "ERRO: " + e.getMessage());
-        }
 
-    } */
+            @Override
+            public void onFailure(Call<JsonObject> call, Throwable t) {
+                Log.e("LOGIN", "Servidor inacessível: " + t.getMessage());
+                if (tela.isFinishing() || tela.isDestroyed()) return;
+                Toast.makeText(tela, "Não foi possível falar com o servidor. Verifique sua internet.", Toast.LENGTH_LONG).show();
+            }
+        });
+    }
 
     public void clickCadastrar(View v){
         Intent it = new Intent(this, CadastrarActivity.class);

@@ -94,9 +94,8 @@ public class PokestopActivity extends Activity {
             Pegou = true;
         }
         else{
-            double diff = TempoAtual.getTime() - inter.getUltimoAcesso().getTime();
-            int diffSec = (int)diff/1000;
-            if(diffSec > 300){
+            long diffMs = TempoAtual.getTime() - inter.getUltimoAcesso().getTime();
+            if(diffMs >= ControladoraFachadaSingleton.COOLDOWN_POKESTOP_MS){
 
                 ControladoraFachadaSingleton.getInstance().interagePokestop(Pkstp, TempoAtual);
 
@@ -104,7 +103,9 @@ public class PokestopActivity extends Activity {
                 Pegou = true;
             }
             else{
-                Toast toastEspere = Toast.makeText(MyApp.getAppContext(),"Espere mais "+ String.valueOf(300-diffSec) +" segundos",Toast.LENGTH_SHORT);
+                // Arredonda para cima para nunca exibir "0 segundos" enquanto ainda há espera
+                long segundosRestantes = (ControladoraFachadaSingleton.COOLDOWN_POKESTOP_MS - diffMs + 999) / 1000;
+                Toast toastEspere = Toast.makeText(MyApp.getAppContext(),"Espere mais "+ segundosRestantes +" segundos",Toast.LENGTH_SHORT);
                 toastEspere.setGravity(Gravity.TOP | Gravity.CENTER_HORIZONTAL,0,0);
                 toastEspere.show();
             }

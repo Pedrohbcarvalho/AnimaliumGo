@@ -2,4 +2,20 @@
 <resources>
     <color name="pokestopBorder">#23D7F6</color>
 
+    <!-- Paleta da tela Detalhes do Animal (protótipo Stitch) -->
+    <color name="primary">#006B2C</color>
+    <color name="surface">#F8F9FF</color>
+    <color name="on_surface">#0B1C30</color>
+    <color name="on_surface_variant">#3E4A3D</color>
+    <color name="icone_fundo">#E5EEFF</color>
+    <color name="foto_fundo">#DCE9FF</color>
+    <color name="periculosidade_fundo">#FFDCC3</color>
+    <color name="periculosidade_icone">#6E3900</color>
+
+    <!-- Status VGI (protótipo Minhas Contribuições) -->
+    <color name="secondary">#904D00</color>
+    <color name="tertiary">#BA0035</color>
+    <color name="xp_fundo">#D9213145</color>
+    <color name="xp_texto">#7FFC97</color>
+
 </resources>

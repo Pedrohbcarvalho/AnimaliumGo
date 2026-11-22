@@ -26,7 +26,7 @@
         android:layout_height="wrap_content"
         android:gravity="center"
         android:id="@+id/txtNomePkmnCaptura"
-        android:text="Nome do Pokemon"
+        android:text=""
         android:textAppearance="?android:attr/textAppearanceSmall"
         android:textColor="#000000"
         android:background="@drawable/roundshapebranco"
@@ -39,8 +39,8 @@
         android:layout_margin="5dp"
         android:visibility="visible"/>
 
+    <!-- A foto do animal é carregada da URL em CapturaActivity (ImagemRemotaUtil.carregarFotoGrande) -->
     <ImageView
-        android:src="@drawable/pikachu"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:scaleType="centerInside"

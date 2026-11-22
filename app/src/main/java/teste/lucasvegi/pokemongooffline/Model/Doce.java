@@ -8,6 +8,7 @@ import java.util.List;
 
 import teste.lucasvegi.pokemongooffline.Util.BancoDadosSingleton;
 
+// DESACOPLADO (2026-11): doces/evolução não são mais usados; mantido só como referência.
 public class Doce implements Serializable{
     private int idDoce;
     private String nomePkm;

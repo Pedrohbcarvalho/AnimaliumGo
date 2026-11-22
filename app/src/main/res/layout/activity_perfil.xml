@@ -163,13 +163,29 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="10dp"
+                android:layout_marginBottom="10dp"
+                android:text="Meus Registros VGI"
+                android:id="@+id/buttonRegistrosVgi"
+                android:background="@drawable/botao_style"
+                android:textStyle="bold"
+                android:textColor="#FFFFFF"
+                android:paddingLeft="16dp"
+                android:paddingRight="16dp"
+                android:layout_centerHorizontal="true"
+                android:layout_below="@+id/buttonTroca"
+                android:onClick="clickRegistrosVgi"/>
+
+            <Button
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
                 android:text="Logout"
                 android:id="@+id/button"
                 android:background="@drawable/botao_style"
                 android:textStyle="bold"
                 android:textColor="#FFFFFF"
                 android:layout_centerHorizontal="true"
-                android:layout_below="@+id/buttonTroca"
+                android:layout_below="@+id/buttonRegistrosVgi"
                 android:onClick="clickLogout"/>
 
         </RelativeLayout>

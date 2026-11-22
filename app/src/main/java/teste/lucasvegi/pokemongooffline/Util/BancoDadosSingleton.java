@@ -20,6 +20,34 @@ public final class BancoDadosSingleton {
     private final String NOME_BANCO = "pokemon_go_bd";
     private static BancoDadosSingleton INSTANCE = new BancoDadosSingleton();
 
+    // Tabela de usuários SEM senha: a sessão é mantida pelos tokens (TokenManager).
+    // Usada na criação do banco e na migração de instalações antigas (que tinham "senha").
+    private static String criarTabelaUsuario(String nomeTabela) {
+        return "CREATE TABLE " + nomeTabela + " (" +
+                "  login TEXT PRIMARY KEY," +
+                "  nome TEXT NOT NULL," +
+                "  sexo TEXT NOT NULL," +
+                "  foto TEXT," +
+                "  dtCadastro TEXT NOT NULL," +
+                "  temSessao TEXT NOT NULL," +
+                "  nivel INTEGER DEFAULT 1 NOT NULL," +
+                "  xp INTEGER DEFAULT 0 NOT NULL" +
+                ");";
+    }
+
+    // Fila de relatos VGI feitos sem internet. Cada relato pertence a UM usuário (loginUsuario)
+    // e só é enviado quando esse mesmo usuário estiver logado (com o token dele).
+    private static final String SCRIPT_RELATO_PENDENTE =
+            "CREATE TABLE IF NOT EXISTS relato_pendente (" +
+                    "  id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                    "  loginUsuario TEXT NOT NULL," +
+                    "  idAnimal INTEGER NOT NULL," +
+                    "  latitude REAL NOT NULL," +
+                    "  longitude REAL NOT NULL," +
+                    "  caminhoFoto TEXT NOT NULL," +
+                    "  dtCriacao INTEGER NOT NULL" +
+                    ");";
+
     private final String[] SCRIPT_DATABASE_CREATE = new String[] {
             "CREATE TABLE pokemon (" +
                     "  idPokemon INTEGER PRIMARY KEY," +
@@ -524,17 +552,7 @@ public final class BancoDadosSingleton {
                     "(39, 18)," +
                     "(40, 18)," +
                     "(122, 18);",
-            "CREATE TABLE usuario (" +
-                    "  login TEXT PRIMARY KEY," +
-                    "  senha TEXT NOT NULL," +
-                    "  nome TEXT NOT NULL," +
-                    "  sexo TEXT NOT NULL," +
-                    "  foto TEXT," +
-                    "  dtCadastro TEXT NOT NULL," +
-                    "  temSessao TEXT NOT NULL," +
-                    "  nivel INTEGER DEFAULT 1 NOT NULL," +
-                    "  xp INTEGER DEFAULT 0 NOT NULL" +
-                    ");",
+            criarTabelaUsuario("usuario"),
             "CREATE TABLE pokemonusuario (" +
                     "  login TEXT NOT NULL," +
                     "  idPokemon INTEGER NOT NULL," +
@@ -783,7 +801,41 @@ public final class BancoDadosSingleton {
         }
 
         c.close();
+
+        // Rodam em TODA abertura: o banco não tem versionamento, então cada ajuste
+        // de esquema precisa ser idempotente para funcionar em instalações existentes.
+        migrarUsuarioSemSenha();
+        db.execSQL(SCRIPT_RELATO_PENDENTE);
+
         Log.i("BANCO_DADOS", "Abriu conexão com o banco.");
+    }
+
+    // Versões antigas guardavam a senha em texto puro na tabela usuario.
+    // O SQLite do Android 7 (API 24) não tem DROP COLUMN, então a tabela é reconstruída.
+    // Os dados (nível, xp, capturas, doces...) são preservados; a sessão antiga é encerrada
+    // porque ainda não existe refresh token salvo (o usuário faz login uma única vez).
+    private void migrarUsuarioSemSenha() {
+        boolean temSenha = false;
+        Cursor info = db.rawQuery("PRAGMA table_info(usuario)", null);
+        int colNome = info.getColumnIndex("name");
+        while (info.moveToNext()) {
+            if ("senha".equals(info.getString(colNome))) temSenha = true;
+        }
+        info.close();
+        if (!temSenha) return;
+
+        db.beginTransaction();
+        try {
+            db.execSQL(criarTabelaUsuario("usuario_nova"));
+            db.execSQL("INSERT INTO usuario_nova (login, nome, sexo, foto, dtCadastro, temSessao, nivel, xp) " +
+                    "SELECT login, nome, sexo, foto, dtCadastro, 'NAO', nivel, xp FROM usuario");
+            db.execSQL("DROP TABLE usuario");
+            db.execSQL("ALTER TABLE usuario_nova RENAME TO usuario");
+            db.setTransactionSuccessful();
+            Log.i("BANCO_DADOS", "Migração: coluna senha removida da tabela usuario.");
+        } finally {
+            db.endTransaction();
+        }
     }
 
     public static BancoDadosSingleton getInstance(){
@@ -812,6 +864,31 @@ public final class BancoDadosSingleton {
 
         Log.i("BANCO_DADOS", "Deletou [" + count + "] registros");
         return count;
+    }
+
+    // Insere ignorando conflito de chave (ex.: doce que o usuário já tem)
+    public long inserirSeNaoExistir(String tabela, ContentValues valores) {
+        return db.insertWithOnConflict(tabela, null, valores, SQLiteDatabase.CONFLICT_IGNORE);
+    }
+
+    // Versões com parâmetros (?): valores digitados pelo usuário (login/e-mail) nunca são
+    // concatenados no SQL. Um e-mail com apóstrofo quebrava as queries antigas.
+    public int atualizar(String tabela, ContentValues valores, String where, String[] args) {
+        int count = db.update(tabela, valores, where, args);
+        Log.i("BANCO_DADOS", "Atualizou [" + count + "] registros");
+        return count;
+    }
+
+    public int deletar(String tabela, String where, String[] args) {
+        int count = db.delete(tabela, where, args);
+        Log.i("BANCO_DADOS", "Deletou [" + count + "] registros");
+        return count;
+    }
+
+    public Cursor buscar(String tabela, String colunas[], String where, String[] args, String orderBy) {
+        Cursor c = db.query(tabela, colunas, where, args, null, null, orderBy);
+        Log.i("BANCO_DADOS", "Realizou uma busca e retornou [" + c.getCount() + "] registros.");
+        return c;
     }
 
     // Busca registros

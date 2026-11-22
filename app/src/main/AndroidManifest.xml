@@ -114,6 +114,15 @@
             android:screenOrientation="portrait"></activity>
         <activity android:name=".Controller.VgiActivity"
             android:screenOrientation="portrait"></activity>
+        <activity
+            android:name=".Controller.DetalhesAnimalActivity"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar"></activity>
+        <activity
+            android:name=".Controller.MinhasContribuicoesVgiActivity"
+            android:screenOrientation="portrait"
+            android:windowSoftInputMode="adjustResize|stateHidden"
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar"></activity>
 
         <!-- CHAVE API KEY -->
         <meta-data

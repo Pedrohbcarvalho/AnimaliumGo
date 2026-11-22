@@ -8,7 +8,16 @@ import java.io.Serializable;
 public class Aparecimento implements Serializable {
     private double latitude;
     private double longitude;
-    private Pokemon pokemon;
+    private Pokemon pokemon; // legado: só a troca Bluetooth ainda usa
+    private Animal animal;   // animal real sorteado pelo backend (spawn do mapa)
+
+    public Animal getAnimal() {
+        return animal;
+    }
+
+    public void setAnimal(Animal animal) {
+        this.animal = animal;
+    }
 
     public double getLatitude() {
         return latitude;

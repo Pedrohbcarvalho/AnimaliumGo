@@ -22,6 +22,7 @@ import java.util.Map;
 import teste.lucasvegi.pokemongooffline.Model.ControladoraFachadaSingleton;
 import teste.lucasvegi.pokemongooffline.Model.Pokemon;
 import teste.lucasvegi.pokemongooffline.Model.PokemonCapturado;
+import teste.lucasvegi.pokemongooffline.Model.SincronizadorVgi;
 import teste.lucasvegi.pokemongooffline.Model.Usuario;
 import teste.lucasvegi.pokemongooffline.R;
 import teste.lucasvegi.pokemongooffline.Util.BancoDadosSingleton;
@@ -170,13 +171,28 @@ public class PerfilActivity extends Activity {
         }
     }
 
+    public void clickRegistrosVgi(View v) {
+        Intent it = new Intent(this, MinhasContribuicoesVgiActivity.class);
+        startActivity(it);
+    }
+
     public void clickLogout(View v){
         try {
             Log.i("LOGOUT", "Saindo...");
 
             AlertDialog.Builder alerta = new AlertDialog.Builder(this);
             alerta.setTitle("SAIR");
-            alerta.setMessage("Deseja finalizar essa sessão?");
+            // Relatos VGI feitos offline ficam guardados e amarrados a este usuário
+            String login = ControladoraFachadaSingleton.getInstance().getUsuario() != null
+                    ? ControladoraFachadaSingleton.getInstance().getUsuario().getLogin() : null;
+            int pendentes = SincronizadorVgi.contarPendentes(login);
+            if (pendentes > 0) {
+                alerta.setMessage("Você tem " + pendentes + (pendentes == 1 ? " relato" : " relatos")
+                        + " aguardando envio. Eles serão enviados quando você entrar novamente neste aparelho.\n\n"
+                        + "Deseja finalizar essa sessão?");
+            } else {
+                alerta.setMessage("Deseja finalizar essa sessão?");
+            }
 
             //Configura ação para confirmação positiva
             alerta.setPositiveButton("Sim", new DialogInterface.OnClickListener() {

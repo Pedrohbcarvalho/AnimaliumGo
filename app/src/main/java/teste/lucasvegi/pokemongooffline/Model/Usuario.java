@@ -20,8 +20,7 @@ import teste.lucasvegi.pokemongooffline.Util.TimeUtil;
  * Created by Lucas on 08/12/2016.
  */
 public class Usuario {
-    private String login;
-    private String senha;
+    private String login; // e-mail do usuário (a senha nunca é guardada no aparelho)
     private String nome;
     private String sexo;
     private String foto;
@@ -47,14 +46,6 @@ public class Usuario {
 
     public void setLogin(String login) {
         this.login = login;
-    }
-
-    public String getSenha() {
-        return senha;
-    }
-
-    public void setSenha(String senha) {
-        this.senha = senha;
     }
 
     public String getNome() {
@@ -118,7 +109,8 @@ public class Usuario {
             //Select p.idPokemon idPokemon, pu.latitude latitude, pu.longitude longitude, pu.dtCaptura dtCaptura from pokemon p, usuario u, pokemonusuario pu where p.idPokemon = pu.idPokemon and u.login = pu.login and u.login = login
             Cursor cPkmn = BancoDadosSingleton.getInstance().buscar("pokemon p, usuario u, pokemonusuario pu",
                     new String[]{"p.idPokemon idPokemon", "pu.latitude latitude", "pu.longitude longitude", "pu.dtCaptura dtCaptura", "pu.estaBloqueado estaBloqueado"},
-                    "p.idPokemon = pu.idPokemon and u.login = pu.login and u.login = '" + this.login + "'",
+                    "p.idPokemon = pu.idPokemon and u.login = pu.login and u.login = ?",
+                    new String[]{this.login},
                     "p.idPokemon asc");
 
             //obtem lista de pokemons da controladora geral
@@ -163,11 +155,13 @@ public class Usuario {
 
     }
 
+    // DESACOPLADO (2026-11): doces/evolução não são mais usados; mantido só como referência.
     public void somarDoces(Pokemon p, int num){
         // 1. Busca o doce filtrando pelo ID e pelo LOGIN do utilizador
         Cursor cDoce = BancoDadosSingleton.getInstance().buscar("doce",
                 new String[]{"idDoce","nome","quant"},
-                "idDoce = '" + p.getIdDoce() + "' AND loginUsuario = '" + this.login + "'", null);
+                "idDoce = ? AND loginUsuario = ?",
+                new String[]{String.valueOf(p.getIdDoce()), this.login}, "");
 
         if (cDoce.moveToNext()) {
             int idD = cDoce.getColumnIndex("idDoce");
@@ -181,7 +175,8 @@ public class Usuario {
 
             // 2. Atualiza apenas o registo deste utilizador específico
             BancoDadosSingleton.getInstance().atualizar("doce", valoresDoce,
-                    "idDoce = '" + p.getIdDoce() + "' AND loginUsuario = '" + this.login + "'");
+                    "idDoce = ? AND loginUsuario = ?",
+                    new String[]{String.valueOf(p.getIdDoce()), this.login});
 
             Log.i("DOCES", "Quantidade de doces do " + cDoce.getString(nome)+ " = " + (int)(cDoce.getInt(quantDoces)+num) );
         }
@@ -212,8 +207,7 @@ public class Usuario {
             //Persiste captura no banco
             BancoDadosSingleton.getInstance().inserir("pokemonusuario", valores);
 
-            //Adiciona 3 doces ao pokemon capturado
-            somarDoces(pkmnAux,3);
+            //(doces desacoplados em 2026-11: a captura não soma mais doces)
 
             //cria objeto PokemonCapturado com informações vindas do objeto Aparecimento parâmetro
             PokemonCapturado pc = new PokemonCapturado();
@@ -265,6 +259,8 @@ public class Usuario {
         return getQuantidadeCapturas(pkmn, true);
     }
 
+    // LEGADO (2026-11): sem chamadores. O ovo agora choca um animal real em
+    // ControladoraFachadaSingleton.chocarOvo (registrado no servidor, sem doces).
     public void Chocar(Location location, int idOvo){
         try {
             Log.i("CHOCAR", "Chocando " + ControladoraFachadaSingleton.getInstance().getPokemonOvo(idOvo).getNome());
@@ -288,8 +284,7 @@ public class Usuario {
             //Persiste captura no banco
             BancoDadosSingleton.getInstance().inserir("pokemonusuario", valores);
 
-            //Adiciona 3 doces ao pokemon capturado
-            somarDoces(pkmnAux,3);
+            //(doces desacoplados em 2026-11: a captura não soma mais doces)
 
             //cria objeto PokemonCapturado com informações vindas do objeto Aparecimento parâmetro
             PokemonCapturado pc = new PokemonCapturado();

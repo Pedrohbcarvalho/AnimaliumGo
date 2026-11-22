@@ -35,6 +35,8 @@ import teste.lucasvegi.pokemongooffline.R;
 import teste.lucasvegi.pokemongooffline.Util.BancoDadosSingleton;
 import teste.lucasvegi.pokemongooffline.View.AdapterPokedex;
 
+// DESACOPLADO (2026-11): doces/evolução não são mais usados; mantido só como referência.
+// Sem porta de entrada: o Diário (PokedexActivity) abre DetalhesAnimalActivity.
 public class DetalhesPokedexActivity extends Activity implements LocationListener {
 
     private Pokemon pkmn;

@@ -10,4 +10,20 @@
         <item name="android:windowFullscreen">true</item>
     </style>
 
+    <!-- Pílula de filtro da tela Minhas Contribuições VGI (cor ativa/inativa definida no Java) -->
+    <style name="PilulaFiltroVgi">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginEnd">8dp</item>
+        <item name="android:background">@drawable/fundo_pilula</item>
+        <item name="android:elevation">1dp</item>
+        <item name="android:paddingStart">14dp</item>
+        <item name="android:paddingEnd">14dp</item>
+        <item name="android:paddingTop">6dp</item>
+        <item name="android:paddingBottom">6dp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:onClick">clickFiltro</item>
+    </style>
+
 </resources>

@@ -46,12 +46,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+import teste.lucasvegi.pokemongooffline.Model.Animal;
 import teste.lucasvegi.pokemongooffline.Model.AoCarregarPokestopsListener;
 import teste.lucasvegi.pokemongooffline.Model.Aparecimento;
 import teste.lucasvegi.pokemongooffline.Model.ControladoraFachadaSingleton;
 import teste.lucasvegi.pokemongooffline.Model.Pokestop;
 import teste.lucasvegi.pokemongooffline.R;
 import teste.lucasvegi.pokemongooffline.Util.BitmapUtil;
+import teste.lucasvegi.pokemongooffline.Util.ImagemRemotaUtil;
+import teste.lucasvegi.pokemongooffline.Model.SincronizadorVgi;
 import teste.lucasvegi.pokemongooffline.Util.directionshelpers.FetchURL;
 import teste.lucasvegi.pokemongooffline.Util.directionshelpers.TaskLoadedCallback;
 
@@ -204,6 +207,9 @@ public class MapActivity extends FragmentActivity implements LocationListener, G
 
         // O onStart já passou enquanto a sessão era restaurada, então a localização começa aqui
         iniciarLocalizacao();
+
+        // App aberto com sessão: envia os relatos VGI que este usuário fez sem internet
+        SincronizadorVgi.sincronizarPendentes();
     }
 
     @Override
@@ -292,6 +298,9 @@ public class MapActivity extends FragmentActivity implements LocationListener, G
         // Sem isso, map.animateCamera() abaixo dá NullPointerException.
         // A posição fica guardada; a próxima atualização (5s) faz o resto com o mapa pronto.
         if (!telaInicializada || map == null) return;
+
+        // A sessão pode ter sido encerrada (ex.: refresh token recusado) enquanto o GPS ainda roda
+        if (ControladoraFachadaSingleton.getInstance().getUsuario() == null) return;
 
         LatLng personagem = new LatLng(location.getLatitude(),location.getLongitude());
 
@@ -414,7 +423,7 @@ public class MapActivity extends FragmentActivity implements LocationListener, G
         if (marker.getTag() != null)
             tag = marker.getTag().toString();
 
-        if (tag == "pokemon") {
+        if ("animal".equals(tag)) {
             if (!marker.equals(eu)) {
                 double distanciaPkmn = getDistanciaPkmn(eu, marker);
                 double distanciaMin = distanciaMinimaParaBatalhar;
@@ -426,7 +435,7 @@ public class MapActivity extends FragmentActivity implements LocationListener, G
                         mp.pause();
                         Aparecimento ap = aparecimentoMap.get(marker);
                         Intent it = new Intent(this, CapturaActivity.class);
-                        it.putExtra("pkmn", ap);
+                        it.putExtra("aparecimento", ap);
 
                         startActivity(it);
 
@@ -611,12 +620,12 @@ public class MapActivity extends FragmentActivity implements LocationListener, G
         try{
             //itera no dicionário de marcadores de aparecimentos
             for (Map.Entry<Marker, Aparecimento> entry : aparecimentoMap.entrySet()){
-                Log.d("LimparMarker", "Pokemon: " + entry.getKey().getTitle());
+                Log.d("LimparMarker", "Animal: " + entry.getKey().getTitle());
                 entry.getKey().remove();
             }
             //limpa o dicionário de marcadores de aparecimentos
             aparecimentoMap.clear();
-            currentPolyline.remove();
+            if (currentPolyline != null) currentPolyline.remove();
             targetPkmn = null;
         }catch (Exception e){
             Log.e("LimparMarker","ERRO: " + e.getMessage());
@@ -657,16 +666,24 @@ public class MapActivity extends FragmentActivity implements LocationListener, G
             Aparecimento [] apVet = ControladoraFachadaSingleton.getInstance().getAparecimentos();
 
             for(int i = 0; i < apVet.length; i++){
-                Log.d("PlotarMarker", "Pokemon: " + apVet[i].getPokemon().getNome() + " Lat: " + apVet[i].getLatitude() + " Long: " + apVet[i].getLongitude());
+                Animal animal = apVet[i].getAnimal();
+                if (animal == null) continue;
+                Log.d("PlotarMarker", "Animal: " + animal.getNomePopular() + " Lat: " + apVet[i].getLatitude() + " Long: " + apVet[i].getLongitude());
 
-                Marker pokePonto = map.addMarker(new MarkerOptions().
-                        icon(BitmapDescriptorFactory.fromResource(apVet[i].getPokemon().getIcone())).
+                // Marcador padrão na hora; o ícone pequeno (foto do animal, 32dp) entra quando baixar
+                final Marker pontoAnimal = map.addMarker(new MarkerOptions().
+                        icon(BitmapDescriptorFactory.defaultMarker()).
                         position(new LatLng(apVet[i].getLatitude(), apVet[i].getLongitude())).
-                        title(apVet[i].getPokemon().getNome()));
-                pokePonto.setTag("pokemon");
+                        title(animal.getNomePopular()));
+                pontoAnimal.setTag("animal");
 
                 //adiciona marcador no dicionário
-                aparecimentoMap.put(pokePonto,apVet[i]);
+                aparecimentoMap.put(pontoAnimal,apVet[i]);
+
+                ImagemRemotaUtil.carregarPinMapa(animal.getFotoUrl(), icone -> {
+                    // o download pode chegar depois do próximo sorteio, quando o marcador já saiu do mapa
+                    if (aparecimentoMap.containsKey(pontoAnimal)) pontoAnimal.setIcon(icone);
+                });
             }
         }catch (Exception e){
             Log.e("PlotarMarker","ERRO: " + e.getMessage());
@@ -707,8 +724,10 @@ public class MapActivity extends FragmentActivity implements LocationListener, G
         double minLong = location.getLongitude() - deltaLong;
         double maxLong = location.getLongitude() + deltaLong;
 
-        //Soteia os aparecimentos de pokemon na controladora geral
-        ControladoraFachadaSingleton.getInstance().sorteiaAparecimentos(minLat, maxLat, minLong, maxLong);
+        //Sorteia os animais reais no backend (síncrono: estamos na thread de sorteio).
+        //O sorteio local de Pokémon (sorteiaAparecimentos) foi desligado. Logs: tag SPAWN_ANIMAIS.
+        ControladoraFachadaSingleton.getInstance().sorteiaAparecimentosAnimais(
+                location.getLatitude(), location.getLongitude(), minLat, maxLat, minLong, maxLong);
 
         //atualiza o mapa na thread principal
         runOnUiThread(new Runnable() {

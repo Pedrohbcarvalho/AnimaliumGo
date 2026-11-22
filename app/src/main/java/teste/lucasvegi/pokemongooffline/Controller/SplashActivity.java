@@ -52,18 +52,16 @@ public class SplashActivity extends Activity {
             @Override
             public void onResponse(Call<List<Animal>> call, Response<List<Animal>> response) {
                 if (response.isSuccessful() && response.body() != null) {
-                    Log.d("TESTE_RETROFIT", "Sucesso! Animais recebidos: " + response.body().size());
-                    for (Animal a : response.body()) {
-                        Log.d("TESTE_RETROFIT", "Animal: " + a.getNomePopular());
-                    }
+                    // Lista usada pelo sorteio do ovo (regra temporária: qualquer animal pode sair)
+                    ControladoraFachadaSingleton.getInstance().setTodosAnimais(response.body());
                 } else {
-                    Log.e("TESTE_RETROFIT", "Erro na resposta: " + response.code());
+                    Log.e("ANIMAIS", "Erro ao carregar a lista de animais: " + response.code());
                 }
             }
 
             @Override
             public void onFailure(Call<List<Animal>> call, Throwable t) {
-                Log.e("TESTE_RETROFIT", "Falha de conexão: " + t.getMessage());
+                Log.e("ANIMAIS", "Falha ao carregar a lista de animais: " + t.getMessage());
             }
         });
 

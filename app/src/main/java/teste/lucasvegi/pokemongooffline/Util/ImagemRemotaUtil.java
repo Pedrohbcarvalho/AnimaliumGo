@@ -6,9 +6,15 @@ import android.util.Log;
 import android.util.LruCache;
 import android.widget.ImageView;
 
+import com.android.volley.DefaultRetryPolicy;
 import com.android.volley.RequestQueue;
+import com.android.volley.Response;
+import com.android.volley.toolbox.BasicNetwork;
+import com.android.volley.toolbox.DiskBasedCache;
+import com.android.volley.toolbox.HurlStack;
 import com.android.volley.toolbox.ImageRequest;
-import com.android.volley.toolbox.Volley;
+
+import java.io.File;
 import com.google.android.gms.maps.model.BitmapDescriptor;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 
@@ -40,9 +46,39 @@ public final class ImagemRemotaUtil {
 
     private ImagemRemotaUtil() { }
 
+    // O padrão do ImageRequest (1 s, 2 tentativas) estoura em rede móvel/CDN frio e o pin fica vermelho
+    private static final int TIMEOUT_IMAGEM_MS = 8000;
+    // Pin e foto grande da mesma URL ocupam duas entradas (chave por tamanho); os 5MB padrão do
+    // Volley encheriam rápido e forçariam downloads de novo
+    private static final int CACHE_DISCO_BYTES = 20 * 1024 * 1024;
+
     private static synchronized RequestQueue getFila() {
-        if (fila == null) fila = Volley.newRequestQueue(MyApp.getAppContext());
+        if (fila == null) {
+            //equivalente ao Volley.newRequestQueue(ctx), só que com cache em disco maior
+            File pasta = new File(MyApp.getAppContext().getCacheDir(), "volley");
+            fila = new RequestQueue(new DiskBasedCache(pasta, CACHE_DISCO_BYTES), new BasicNetwork(new HurlStack()));
+            fila.start();
+        }
         return fila;
+    }
+
+    // Todas as imagens passam por aqui. A chave de cache do Volley é só a URL: se o pin (32dp) e a
+    // foto grande da mesma URL estiverem baixando ao mesmo tempo, o Volley entrega o MESMO Bitmap já
+    // decodificado às duas (WaitingRequestManager) e a captura mostra o animal minúsculo.
+    // Com a chave incluindo o tamanho, cada tamanho tem sua requisição e seu bitmap.
+    private static ImageRequest criarRequisicao(final String url, final int ladoPx,
+                                                Response.Listener<Bitmap> aoBaixar, Response.ErrorListener aoFalhar) {
+        // CENTER_INSIDE: cabe inteiro no quadrado sem distorcer.
+        // ARGB_8888: preserva a transparência de PNGs/WebPs recortados.
+        ImageRequest requisicao = new ImageRequest(url, aoBaixar, ladoPx, ladoPx,
+                ImageView.ScaleType.CENTER_INSIDE, Bitmap.Config.ARGB_8888, aoFalhar) {
+            @Override
+            public String getCacheKey() {
+                return url + "#" + ladoPx;
+            }
+        };
+        requisicao.setRetryPolicy(new DefaultRetryPolicy(TIMEOUT_IMAGEM_MS, 1, 1f));
+        return requisicao;
     }
 
     // Pin do mapa. Chamar na UI thread depois do onMapReady (BitmapDescriptorFactory exige o
@@ -62,15 +98,12 @@ public final class ImagemRemotaUtil {
             return;
         }
 
-        // CENTER_INSIDE: cabe inteiro no quadrado do pin sem distorcer.
-        // ARGB_8888: preserva a transparência de PNGs recortados.
-        ImageRequest requisicao = new ImageRequest(url,
+        ImageRequest requisicao = criarRequisicao(url, px,
                 bitmap -> {
                     // NÃO reciclar: o BitmapDescriptor e o cache continuam usando este bitmap
                     cachePins.put(chave, bitmap);
                     callback.carregado(BitmapDescriptorFactory.fromBitmap(bitmap));
                 },
-                px, px, ImageView.ScaleType.CENTER_INSIDE, Bitmap.Config.ARGB_8888,
                 erro -> {
                     Log.e("IMAGEM_REMOTA", "Erro ao baixar pin: " + url + " - " + erro.getMessage());
                     callback.carregado(BitmapDescriptorFactory.defaultMarker());
@@ -98,13 +131,12 @@ public final class ImagemRemotaUtil {
         destino.setTag(url);
         if (url == null || url.isEmpty()) return;
 
-        ImageRequest requisicao = new ImageRequest(url,
+        ImageRequest requisicao = criarRequisicao(url, ladoPx,
                 bitmap -> {
                     if (!url.equals(destino.getTag())) return; // a view já mostra outra imagem
                     destino.setImageBitmap(bitmap);
                     if (aoCarregar != null) aoCarregar.run();
                 },
-                ladoPx, ladoPx, ImageView.ScaleType.CENTER_INSIDE, Bitmap.Config.ARGB_8888,
                 erro -> Log.e("IMAGEM_REMOTA", "Erro ao baixar foto: " + url + " - " + erro.getMessage()));
         getFila().add(requisicao);
     }

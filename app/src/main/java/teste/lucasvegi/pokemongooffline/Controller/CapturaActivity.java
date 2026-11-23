@@ -1,5 +1,6 @@
 package teste.lucasvegi.pokemongooffline.Controller;
 
+import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
@@ -12,6 +13,8 @@ import android.hardware.SensorManager;
 import android.media.MediaPlayer;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.SystemClock;
 import android.util.Log;
 import android.view.Display;
 import android.view.MotionEvent;
@@ -34,11 +37,62 @@ import teste.lucasvegi.pokemongooffline.Model.Aparecimento;
 import teste.lucasvegi.pokemongooffline.Model.ControladoraFachadaSingleton;
 import teste.lucasvegi.pokemongooffline.R;
 import teste.lucasvegi.pokemongooffline.Util.ImagemRemotaUtil;
+import teste.lucasvegi.pokemongooffline.Util.RandomUtil;
 import teste.lucasvegi.pokemongooffline.Util.ViewUnitsUtil;
 import teste.lucasvegi.pokemongooffline.View.CameraPreview;
+import teste.lucasvegi.pokemongooffline.View.MiraEnquadramentoView;
 
 
 public class CapturaActivity extends Activity implements SensorEventListener {
+    // ===== CAPTURA POR ENQUADRAMENTO (etapa 1) =====
+    // CHAVE DE REVERSÃO: true = catalogar mantendo o animal no círculo central;
+    // false = fluxo original da Pokébola (arrastar/arremessar), que continua intacto abaixo.
+    private static final boolean MODO_CAPTURA_ENQUADRAMENTO = true;
+    // 3 s: varrer a cena passa pelo círculo em < 0,5 s, então exige intenção, mas não cansa o braço
+    private static final long TEMPO_ENQUADRAMENTO_MS = 3000;
+    private static final float FRACAO_RAIO_MIRA = 0.20f;      //raio do círculo = 20% da largura (~±14° com escalaX = dimenX/72)
+    private static final float FRACAO_DESLOCAMENTO_INICIAL = 1.6f; //animal nasce a 1,6 raio do centro: fora do círculo, mas na tela
+    private static final long INTERVALO_VERIFICACAO_MS = 50;
+
+    private MiraEnquadramentoView mira;
+    private final Handler handlerEnquadramento = new Handler();
+    private float raioMira;
+    private long tempoEnquadradoMs = 0;
+    private long ultimaVerificacao = 0;
+    private boolean deslocamentoInicialAplicado = false; //posição inicial do animal já definida (etapa 1 ou 2)
+
+    // ----- etapa 2: cada regra tem a sua chave; false desliga só aquela regra -----
+    private static final boolean SPAWN_AO_REDOR = true;      //false = posicionamento da etapa 1 (na tela, giroscópio antigo)
+    private static final boolean FUGA_POR_DEMORA = true;     //só tem efeito com SPAWN_AO_REDOR
+    private static final boolean LIMITE_TEMPO_ENCONTRO = true;
+    private static final boolean SETA_DIRECAO = true;
+    private static final boolean TAMANHO_FIXO_NO_ENQUADRAMENTO = true; //false = volta o "zoom" por acelerômetro
+
+    private static final float AZIMUTE_MIN_SPAWN = 20f;  //graus; o círculo cobre ~14°, então nunca nasce enquadrado
+    private static final float ELEVACAO_MIN = -10f;      //abaixo disso pareceria "aos pés" do jogador
+    private static final float ELEVACAO_MAX = 15f;       //acima disso pareceria "no céu"
+    private static final long TEMPO_PARA_FUGIR_MS = 10000;     //tempo FORA do círculo até o animal se assustar
+    private static final float SALTO_FUGA_MIN = 60f;     //graus: o bastante para sair do campo de visão (~72°)
+    private static final float SALTO_FUGA_MAX = 120f;
+    private static final long DURACAO_ANIMACAO_FUGA_MS = 800;
+    private static final long TEMPO_MAXIMO_ENCONTRO_MS = 30000;
+    private static final long TEMPO_AVISO_FINAL_MS = 5000;     //cronômetro fica vermelho
+    private static final double ZONA_MORTA_GIRO_RAD_S = 0.02;  //ignora ruído do giroscópio com o celular parado
+    private static final double DT_MAXIMO_GIRO_S = 0.1;        //descarta o 1º evento após pausa (dt enorme)
+
+    //posição do animal "no mundo", em graus, relativa à direção do celular quando a tela abriu
+    private float azimuteAnimal = 0;    //+ = à direita
+    private float elevacaoAnimal = 0;   //+ = acima
+    //rotação acumulada do celular (mesmos eixos/sinais do giroscópio antigo)
+    private float yawAcumulado = 0;     //+ = virou para a esquerda
+    private float pitchAcumulado = 0;   //+ = câmera inclinada para cima
+    private float rollAcumulado = 0;
+    private long tempoForaDoCirculoMs = 0;
+    private long tempoEncontroMs = 0;
+    private boolean encontroEncerrado = false;  //o animal fugiu por tempo (sem registro)
+    private ValueAnimator animacaoFuga;
+    // ===== FIM CAPTURA POR ENQUADRAMENTO (campos) =====
+
     private SensorManager sensorManager;
     private Sensor sensor;
     private Sensor accelerometer;
@@ -178,11 +232,24 @@ public class CapturaActivity extends Activity implements SensorEventListener {
         img = (ImageView) findViewById(R.id.pokemon);
         pokebola = (ImageView) findViewById(R.id.pokeball);
 
-        configuraPokebola();
+        if (MODO_CAPTURA_ENQUADRAMENTO) {
+            configuraEnquadramento();
+            //o posicionamento é postado depois do runnable de configuraPokemon(), então roda já com o tamanho calculado
+            ImagemRemotaUtil.carregarFotoGrande(img, animal.getFotoUrl(), () -> {
+                configuraPokemon();
+                if (SPAWN_AO_REDOR)
+                    sorteiaPosicaoAoRedor();     //etapa 2: em qualquer direção (360°)
+                else
+                    posicionaAnimalForaDaMira(); //etapa 1: deslocado, mas na tela
+            });
+            iniciaVerificacaoEnquadramento();
+        } else {
+            configuraPokebola();
 
-        //Ícone GRANDE: a mesma foto do pin do mapa, decodificada no tamanho da tela.
-        //configuraPokemon() mede a imagem real, então só roda depois que ela carregar.
-        ImagemRemotaUtil.carregarFotoGrande(img, animal.getFotoUrl(), this::configuraPokemon);
+            //Ícone GRANDE: a mesma foto do pin do mapa, decodificada no tamanho da tela.
+            //configuraPokemon() mede a imagem real, então só roda depois que ela carregar.
+            ImagemRemotaUtil.carregarFotoGrande(img, animal.getFotoUrl(), this::configuraPokemon);
+        }
 
         if(sensor != null){
             //Começa a escutar os sensores utilizados
@@ -199,6 +266,7 @@ public class CapturaActivity extends Activity implements SensorEventListener {
         super.onPause();
         //Para de escutar os sensores
         sensorManager.unregisterListener(this);
+        handlerEnquadramento.removeCallbacks(verificaEnquadramento); //só a verificação: um finish() já agendado continua valendo
         imagemPokemonPreparada = false;
         imagemPokeballPreparada = false;
 
@@ -224,6 +292,8 @@ public class CapturaActivity extends Activity implements SensorEventListener {
         //para a musica da batalha e devolve o recurso para o sistema
         mpBattle.pause();
         mpBattle.release();
+
+        if (animacaoFuga != null) animacaoFuga.cancel(); //enquadramento: não animar uma view de tela já fechada
     }
 
     private void animate(double fromDegrees, double toDegrees, long durationMillis, ImageView img) {
@@ -271,6 +341,9 @@ public class CapturaActivity extends Activity implements SensorEventListener {
     }
 
     private void onAccelerationChanged(SensorEvent event) {
+        //enquadramento: tamanho fixo (o zoom abaixo deriva e encolhe/aumenta o animal sozinho)
+        if (MODO_CAPTURA_ENQUADRAMENTO && TAMANHO_FIXO_NO_ENQUADRAMENTO) return;
+
         double elapsed = getSensorElapsedSeconds(event);
 
         double accelerationSensor = -event.values[2];
@@ -279,7 +352,7 @@ public class CapturaActivity extends Activity implements SensorEventListener {
 
         accelerationNoise += (1 / ++accelerationSamples) * (accelerationSensorMagnitude - accelerationNoise);
 
-        if (imagemPokemonPreparada && imagemPokeballPreparada) {
+        if (isCenaPronta()) {
             // Atenua o ruído na aceleração.
             double acceleration = Math.max(accelerationSensorMagnitude - accelerationNoise, 0) * accelerationSensorDirection;
 
@@ -294,7 +367,13 @@ public class CapturaActivity extends Activity implements SensorEventListener {
     }
 
     public void onGyroscopeChanged(SensorEvent event) {
-        if(imagemPokemonPreparada && imagemPokeballPreparada) {
+        //enquadramento etapa 2: posição angular (360°); o código antigo abaixo segue intacto para os outros modos
+        if (MODO_CAPTURA_ENQUADRAMENTO && SPAWN_AO_REDOR) {
+            atualizaPosicaoAngular(event);
+            return;
+        }
+
+        if(isCenaPronta()) {
             float xNovo = img.getX();
             float yNovo = img.getY();
 
@@ -818,6 +897,280 @@ public class CapturaActivity extends Activity implements SensorEventListener {
             }
         });
     }
+
+    // ===== CAPTURA POR ENQUADRAMENTO (etapa 1) =====
+    // Etapa 1: permanência no círculo central + encerramento do fluxo.
+    // Etapa 2 (chaves próprias no topo): spawn em 360° com limite vertical, seta de direção,
+    // fuga por demora, tempo-limite do encontro e tamanho fixo.
+    // Ainda NÃO existe: menu de frutas.
+
+    //Com a Pokébola desligada ela nunca fica "preparada"; os sensores só dependem dela no fluxo antigo
+    private boolean isCenaPronta() {
+        return imagemPokemonPreparada && (MODO_CAPTURA_ENQUADRAMENTO || imagemPokeballPreparada);
+    }
+
+    //Esconde a Pokébola e coloca a mira por cima de tudo (uma vez só, mesmo com vários onResume)
+    private void configuraEnquadramento() {
+        pokebola.setVisibility(View.GONE);
+        //FIT_CENTER amplia um bitmap menor que a caixa (centerInside não amplia): defesa extra contra foto pequena
+        img.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        //o giroscópio antigo ligava isto a cada evento; o motor angular não passa por lá
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        if (mira != null) return;
+
+        raioMira = dimenX * FRACAO_RAIO_MIRA;
+        mira = new MiraEnquadramentoView(this);
+        mira.setRaio(raioMira);
+        mira.setCentro(dimenX / 2f, dimenY / 2f); //mesmo centro usado para posicionar o animal em configuraPokemon()
+
+        AbsoluteLayout camada = (AbsoluteLayout) findViewById(R.id.imagemAR);
+        camada.addView(mira, new AbsoluteLayout.LayoutParams(
+                AbsoluteLayout.LayoutParams.MATCH_PARENT, AbsoluteLayout.LayoutParams.MATCH_PARENT, 0, 0));
+    }
+
+    //O animal nasce deslocado (mas visível) para o jogador ter que enquadrar.
+    //Usa translation, igual ao giroscópio, então os layout params refeitos por configuraPokemon() não desfazem o deslocamento.
+    //Usado só com SPAWN_AO_REDOR = false; o spawn fora do eixo da câmera (etapa 2) é sorteiaPosicaoAoRedor().
+    private void posicionaAnimalForaDaMira() {
+        img.post(new Runnable() {
+            @Override
+            public void run() {
+                if (deslocamentoInicialAplicado) return;
+                deslocamentoInicialAplicado = true;
+
+                //sem giroscópio não há como mover o animal até o círculo: deixa no centro
+                if (sensor == null) return;
+
+                double angulo = RandomUtil.randomDoubleInRange(0, 2 * Math.PI);
+                float distancia = raioMira * FRACAO_DESLOCAMENTO_INICIAL;
+                img.setTranslationX(img.getTranslationX() + (float) (Math.cos(angulo) * distancia));
+                img.setTranslationY(img.getTranslationY() + (float) (Math.sin(angulo) * distancia));
+            }
+        });
+    }
+
+    private void iniciaVerificacaoEnquadramento() {
+        handlerEnquadramento.removeCallbacks(verificaEnquadramento);
+        ultimaVerificacao = SystemClock.uptimeMillis();
+        handlerEnquadramento.postDelayed(verificaEnquadramento, INTERVALO_VERIFICACAO_MS);
+    }
+
+    //Roda por timer (não pelo onSensorChanged) para contar tempo mesmo com o celular parado
+    private final Runnable verificaEnquadramento = new Runnable() {
+        @Override
+        public void run() {
+            if (capturou || encontroEncerrado) return;
+
+            long agora = SystemClock.uptimeMillis();
+            long delta = agora - ultimaVerificacao;
+            ultimaVerificacao = agora;
+
+            if (isCenaPronta() && deslocamentoInicialAplicado) {
+                boolean dentro;
+                if (SPAWN_AO_REDOR) {
+                    //reaplica a cada tick: mantém a imagem certa mesmo sem eventos do giroscópio
+                    aplicaPosicaoAngular();
+                    //decide pela posição angular (independe do layout já ter sido refeito)
+                    dentro = Math.hypot(deslocamentoTelaX(), deslocamentoTelaY()) <= raioMira;
+                } else {
+                    //etapa 1. Centro do animal: a rotação do giroscópio gira em torno dele, então não interfere
+                    float centroAnimalX = img.getX() + larguraImgPokemon / 2;
+                    float centroAnimalY = img.getY() + alturaImgPokemon / 2;
+                    dentro = Math.hypot(centroAnimalX - dimenX / 2f, centroAnimalY - dimenY / 2f) <= raioMira;
+                }
+
+                //fora do círculo o progresso esvazia no dobro da velocidade (tremor rápido não zera tudo)
+                if (dentro)
+                    tempoEnquadradoMs += delta;
+                else
+                    tempoEnquadradoMs = Math.max(0, tempoEnquadradoMs - 2 * delta);
+
+                mira.setAnimalDentro(dentro);
+                mira.setProgresso(tempoEnquadradoMs / (float) TEMPO_ENQUADRAMENTO_MS);
+
+                if (tempoEnquadradoMs >= TEMPO_ENQUADRAMENTO_MS) {
+                    capturou = true;
+                    Log.w("Enquadramento", "Catalogou por enquadramento " + getTime());
+                    concluirCatalogacao();
+                    return;
+                }
+
+                if (SETA_DIRECAO && SPAWN_AO_REDOR) atualizaSeta();
+
+                //FUGA: só conta o tempo FORA do círculo; quem está enquadrando nunca é punido.
+                //FUTURO (não implementar agora): a fruta certa do menu lateral pausaria esta regra.
+                if (FUGA_POR_DEMORA && SPAWN_AO_REDOR && sensor != null && !dentro) {
+                    tempoForaDoCirculoMs += delta;
+                    if (tempoForaDoCirculoMs >= TEMPO_PARA_FUGIR_MS && !isFugindo()) fogeParaOutroPonto();
+                }
+
+                if (LIMITE_TEMPO_ENCONTRO) {
+                    tempoEncontroMs += delta;
+                    long restante = Math.max(0, TEMPO_MAXIMO_ENCONTRO_MS - tempoEncontroMs);
+                    mira.setTempoRestante((int) Math.ceil(restante / 1000.0), restante <= TEMPO_AVISO_FINAL_MS);
+                    //prorrogação amigável: se o anel está enchendo, deixa terminar
+                    boolean prorrogacao = dentro && tempoEnquadradoMs > 0;
+                    if (restante == 0 && !prorrogacao) {
+                        encerrarPorFuga();
+                        return;
+                    }
+                }
+            }
+
+            handlerEnquadramento.postDelayed(this, INTERVALO_VERIFICACAO_MS);
+        }
+    };
+
+    // ----- etapa 2: posição angular (o animal "existe" ao redor do jogador, em 360°) -----
+
+    private static float normalizaGraus(float graus) {
+        graus %= 360f;
+        if (graus >= 180f) graus -= 360f;
+        if (graus < -180f) graus += 360f;
+        return graus;
+    }
+
+    //Distância, em pixels, do centro do animal até o centro da tela
+    private float deslocamentoTelaX() {
+        return normalizaGraus(azimuteAnimal + yawAcumulado) * escalaX;
+    }
+
+    private float deslocamentoTelaY() {
+        return (pitchAcumulado - elevacaoAnimal) * escalaY;
+    }
+
+    //Integra o giroscópio com o dt real do evento (o código antigo supõe 0,02 s fixos)
+    private void atualizaPosicaoAngular(SensorEvent event) {
+        double dt = getSensorElapsedSeconds(event);
+        if (dt <= 0 || dt > DT_MAXIMO_GIRO_S) return;
+
+        //mesmos eixos e sinais do giroscópio antigo: X = vertical, Y = horizontal, Z = giro da imagem
+        if (Math.abs(event.values[0]) > ZONA_MORTA_GIRO_RAD_S) pitchAcumulado += Math.toDegrees(event.values[0] * dt);
+        if (Math.abs(event.values[1]) > ZONA_MORTA_GIRO_RAD_S) yawAcumulado += Math.toDegrees(event.values[1] * dt);
+        if (Math.abs(event.values[2]) > ZONA_MORTA_GIRO_RAD_S) rollAcumulado += Math.toDegrees(event.values[2] * dt);
+        yawAcumulado = normalizaGraus(yawAcumulado);
+
+        aplicaPosicaoAngular();
+    }
+
+    private void aplicaPosicaoAngular() {
+        if (!isCenaPronta() || !deslocamentoInicialAplicado || encontroEncerrado) return;
+        img.setX(dimenX / 2f + deslocamentoTelaX() - larguraImgPokemon / 2);
+        img.setY(dimenY / 2f + deslocamentoTelaY() - alturaImgPokemon / 2);
+        img.setRotation(rollAcumulado); //mantém o animal "nivelado" com o mundo, como antes
+    }
+
+    //Sorteia onde o animal está ao redor do jogador: qualquer direção, altura crível.
+    //FUTURO (não implementar agora): a faixa de elevação pode depender de animal.getHabito() (ex.: arborícola mais alto).
+    private void sorteiaPosicaoAoRedor() {
+        img.post(new Runnable() {
+            @Override
+            public void run() {
+                if (!deslocamentoInicialAplicado) {
+                    //sem giroscópio não há como procurar: fica no centro (azimute 0, elevação 0)
+                    if (sensor != null) {
+                        float lado = Math.random() < 0.5 ? -1f : 1f;
+                        float relativo = lado * (float) RandomUtil.randomDoubleInRange(AZIMUTE_MIN_SPAWN, 180);
+                        //relativo à direção ATUAL do celular (o jogador pode ter girado enquanto a foto baixava)
+                        azimuteAnimal = normalizaGraus(relativo - yawAcumulado);
+                        elevacaoAnimal = (float) RandomUtil.randomDoubleInRange(ELEVACAO_MIN, ELEVACAO_MAX);
+                    }
+                    deslocamentoInicialAplicado = true;
+                    Log.d("Enquadramento", "Spawn: azimute " + azimuteAnimal + "° elevação " + elevacaoAnimal + "°");
+                }
+                aplicaPosicaoAngular();
+            }
+        });
+    }
+
+    //Seta na borda enquanto o centro do animal está fora da tela
+    private void atualizaSeta() {
+        float dx = deslocamentoTelaX();
+        float dy = deslocamentoTelaY();
+        boolean foraDaTela = Math.abs(dx) > dimenX / 2f || Math.abs(dy) > dimenY / 2f;
+        mira.setIndicador(foraDaTela, (float) Math.toDegrees(Math.atan2(dy, dx)));
+    }
+
+    private boolean isFugindo() {
+        return animacaoFuga != null && animacaoFuga.isRunning();
+    }
+
+    //O animal se assusta e corre para outro ponto: sempre para LONGE de onde a câmera aponta
+    private void fogeParaOutroPonto() {
+        tempoForaDoCirculoMs = 0;
+
+        final float azimuteInicial = azimuteAnimal;
+        final float elevacaoInicial = elevacaoAnimal;
+        float relativoAtual = normalizaGraus(azimuteAnimal + yawAcumulado);
+        float lado = relativoAtual != 0 ? Math.signum(relativoAtual) : (Math.random() < 0.5 ? -1f : 1f);
+        final float salto = lado * (float) RandomUtil.randomDoubleInRange(SALTO_FUGA_MIN, SALTO_FUGA_MAX);
+        final float elevacaoFinal = (float) RandomUtil.randomDoubleInRange(ELEVACAO_MIN, ELEVACAO_MAX);
+
+        //anima a posição angular: se estiver à vista o jogador VÊ o animal correr; se não, a seta muda
+        animacaoFuga = ValueAnimator.ofFloat(0f, 1f);
+        animacaoFuga.setDuration(DURACAO_ANIMACAO_FUGA_MS);
+        animacaoFuga.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            @Override
+            public void onAnimationUpdate(ValueAnimator animacao) {
+                float f = (float) animacao.getAnimatedValue();
+                azimuteAnimal = normalizaGraus(azimuteInicial + salto * f);
+                elevacaoAnimal = elevacaoInicial + (elevacaoFinal - elevacaoInicial) * f;
+                aplicaPosicaoAngular();
+            }
+        });
+        animacaoFuga.start();
+
+        mira.setMensagemTemporaria("Ele se assustou e correu!");
+        Log.d("Enquadramento", "Fugiu por demora: salto de " + salto + "°");
+    }
+
+    //Tempo-limite estourou: o animal foge de vez, sem registro nem XP, e a tela volta ao mapa
+    private void encerrarPorFuga() {
+        encontroEncerrado = true;
+        if (animacaoFuga != null) animacaoFuga.cancel();
+        Log.w("Enquadramento", "Encontro encerrado por tempo " + getTime());
+
+        mira.setFugiu();
+        mpBattle.pause();
+        float lado = Math.random() < 0.5 ? -1f : 1f;
+        img.animate().alpha(0f).translationXBy(lado * dimenX * 0.3f).setDuration(600).start();
+
+        Toast.makeText(getBaseContext(), animal.getNomePopular() + " fugiu! Continue explorando para encontrá-lo de novo.",
+                Toast.LENGTH_LONG).show();
+
+        handlerEnquadramento.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                finish();
+            }
+        }, 2500);
+    }
+
+    //Mesmo encerramento do fluxo antigo (registro no servidor, XP, som de sucesso, finish),
+    //sem quiques/explosão. Duplicado de propósito para não tocar em configuraEfeitoCaptura().
+    private void concluirCatalogacao() {
+        // O XP local é só o feedback imediato: a resposta do POST traz o valor oficial.
+        ControladoraFachadaSingleton.getInstance().registrarCapturaAnimal(ap);
+        ControladoraFachadaSingleton.getInstance().aumentaXp("captura");
+
+        mira.setConcluido();
+        img.animate().alpha(0f).setDuration(600).start();
+
+        MediaPlayer mp2 = MediaPlayer.create(getBaseContext(), R.raw.sucesso);
+        mpBattle.pause();
+        mp2.start();
+
+        Toast.makeText(getBaseContext(), animal.getNomePopular() + " foi catalogado! \\o/", Toast.LENGTH_LONG).show();
+
+        //mesmo tempo do fluxo antigo para o som de sucesso tocar antes de voltar ao mapa
+        handlerEnquadramento.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                finish();
+            }
+        }, 4500);
+    }
+    // ===== FIM CAPTURA POR ENQUADRAMENTO =====
 
     public String getTime(){
         Calendar c = Calendar.getInstance();
